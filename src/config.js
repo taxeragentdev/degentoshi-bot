@@ -26,7 +26,23 @@ export const CONFIG = {
     }
     return telegram;
   })(),
-  
+  /**
+   * Degen Claw otomatik emir boyutu (USDC): max(minNotional, min(balance*fraction, maxUsd)), ≤ balance.
+   */
+  autoTradeMinNotionalUsd:
+    parseFloat(process.env.AUTO_TRADE_MIN_NOTIONAL_USD) > 0
+      ? parseFloat(process.env.AUTO_TRADE_MIN_NOTIONAL_USD)
+      : 15,
+  autoTradeBalanceFraction: (() => {
+    const raw = parseFloat(process.env.AUTO_TRADE_BALANCE_FRACTION);
+    if (Number.isFinite(raw) && raw > 0 && raw <= 1) return raw;
+    return 0.2;
+  })(),
+  autoTradeMaxPositionUsd:
+    parseFloat(process.env.AUTO_TRADE_MAX_POSITION_USD) > 0
+      ? parseFloat(process.env.AUTO_TRADE_MAX_POSITION_USD)
+      : 100,
+
   coins: process.env.COINS?.split(',') || [
     'BTC/USDC', 'ETH/USDC', 'SOL/USDC', 'DOGE/USDC',
     'PENGU/USDC', 'HYPE/USDC', 'PEPE/USDC', 'POPCAT/USDC',

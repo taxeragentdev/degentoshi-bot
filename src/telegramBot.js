@@ -86,6 +86,46 @@ export class TelegramBot {
   }
 
   /**
+   * Aynı sinyalle birden fazla agent: özet tek mesaj
+   */
+  async sendAutoTradeBatchResults(signal, { pairLabel, successes, balanceSkips, openFailures }) {
+    const sideEmoji = signal.action === 'LONG' ? '🟢' : '🔴';
+    let msg = `📊 <b>Otomatik işlem özeti</b> — ${sideEmoji} ${signal.action} <code>${pairLabel}</code>\n\n`;
+
+    if (successes.length > 0) {
+      msg += `<b>İşlem açılan agentlar (${successes.length}):</b>\n`;
+      for (const s of successes) {
+        msg += `• ${s.agentLabel} (<code>${s.agentAlias}</code>) — $${s.size.toFixed(2)} · ${signal.leverage}x\n`;
+      }
+      msg += '\n';
+    }
+
+    if (balanceSkips.length > 0) {
+      msg += `<i>Atlandı (bakiye &lt; min ~$${CONFIG.autoTradeMinNotionalUsd} veya yetersiz):</i>\n`;
+      for (const b of balanceSkips) {
+        msg += `• ${b.label} (<code>${b.alias}</code>) — $${(b.balance ?? 0).toFixed(2)}\n`;
+      }
+      msg += '\n';
+    }
+
+    if (openFailures.length > 0) {
+      msg += `<i>Hata / API:</i>\n`;
+      for (const f of openFailures) {
+        msg += `• ${f.label} (<code>${f.alias}</code>): ${f.error}\n`;
+      }
+      msg += '\n';
+    }
+
+    if (successes.length === 0 && balanceSkips.length === 0 && openFailures.length === 0) {
+      msg += `<i>Hiçbir agentta işlem açılmadı.</i>\n\n`;
+    }
+
+    msg += `<b>Sinyal özeti</b>\n`;
+    msg += this.formatSignalBlock(signal);
+    await this.sendMessage(msg);
+  }
+
+  /**
    * Aynı coinde tüm aktif agentlarda zaten pozisyon var
    */
   async sendAutoTradeSkippedAllHolding(signal, holders) {
@@ -254,7 +294,7 @@ Hoş geldin! Bot sürekli tarama yapar; Telegram’a sinyal gönderir. <b>Otomat
 
     if (autoOn) {
       msg += '✅ <b>Durum:</b> AÇIK\n';
-      msg += `Sinyal güveni <b>${tradeMin}</b> ve üzeriyse sırayla bu agentlar Degen Claw ile işlem dener (round-robin).\n\n`;
+      msg += `Sinyal güveni <b>${tradeMin}</b> ve üzeriyse, bu coinde pozisyonu olmayan ve bakiyesi yeterli <b>tüm</b> aktif agentlar ayrı ayrı emir dener.\n\n`;
     } else {
       msg += '⛔ <b>Durum:</b> KAPALI\n';
       msg += 'Şu an sadece sinyal üretilir / Telegram bildirimi gider; <b>otomatik emir gönderilmez</b>.\n';
@@ -270,6 +310,9 @@ Hoş geldin! Bot sürekli tarama yapar; Telegram’a sinyal gönderir. <b>Otomat
         msg += `• <code>${alias}</code> (tanımsız alias)\n`;
       }
     }
+
+    msg += `\n💵 <b>Emir tutarı (USDC):</b> min <code>${CONFIG.autoTradeMinNotionalUsd}</code> · bakiyenin <code>${(CONFIG.autoTradeBalanceFraction * 100).toFixed(0)}%</code> · üst sınır <code>${CONFIG.autoTradeMaxPositionUsd}</code>\n`;
+    msg += `<i>Env: AUTO_TRADE_MIN_NOTIONAL_USD, AUTO_TRADE_BALANCE_FRACTION (0–1), AUTO_TRADE_MAX_POSITION_USD</i>\n`;
 
     msg += `\n📊 <b>Telegram eşik:</b> <code>${telMin}</code>\n`;
     msg += `📊 <b>Otomatik emir eşik:</b> <code>${tradeMin}</code>`;
