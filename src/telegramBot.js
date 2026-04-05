@@ -131,6 +131,11 @@ export class TelegramBot {
           await this.handleShowActiveAgents(chatId);
           break;
 
+        case '/autotrade':
+        case '/status':
+          await this.handleAutoTradeStatus(chatId);
+          break;
+
         default:
           await this.sendMessage(`❓ Bilinmeyen komut: ${command}\n\n/help yazarak komutları görebilirsin.`);
       }
@@ -143,17 +148,16 @@ export class TelegramBot {
     const message = `
 🤖 <b>Kripto Sinyal Botu</b>
 
-Hoş geldin! Bu bot otomatik olarak yüksek kaliteli kripto trading sinyalleri üretir ve Degen Claw ile işlem yapabilir.
+Hoş geldin! Bot sürekli tarama yapar; Telegram’a sinyal gönderir. <b>Otomatik işlem</b> (Degen Claw’a emir) ayrıca <code>AUTO_TRADE=true</code> ile açılır — durum: <code>/autotrade</code>
 
 <b>Özellikler:</b>
 ✅ Multi-timeframe analiz (1H, 15M, 5M)
 ✅ 8+ teknik indikatör
 ✅ Perpetual market analizi
-✅ 12 Degen Claw agent yönetimi
-✅ Otomatik sinyal bildirimleri
+✅ 12 Degen Claw agent (manuel / otomatik)
+✅ Sinyal bildirimleri
 
-<b>Komutlar için:</b> /help
-<b>Agent listesi için:</b> /agents
+<b>Komutlar:</b> /help · <b>Otomatik işlem durumu:</b> /autotrade
 `;
 
     await this.sendMessage(message);
@@ -166,6 +170,7 @@ Hoş geldin! Bu bot otomatik olarak yüksek kaliteli kripto trading sinyalleri �
 <b>Sinyal Botu:</b>
 /start - Botu başlat
 /help - Yardım menüsü
+/autotrade veya /status - Otomatik işlem açık mı, hangi agentlar
 
 <b>Agent Yönetimi:</b>
 /agents - 12 agent listesi
@@ -195,6 +200,41 @@ Hoş geldin! Bu bot otomatik olarak yüksek kaliteli kripto trading sinyalleri �
 `;
 
     await this.sendMessage(message);
+  }
+
+  /**
+   * Sunucudaki env ile uyumlu: AUTO_TRADE ve ACTIVE_AGENTS Railway’de tanımlı olmalı.
+   */
+  async handleAutoTradeStatus(chatId) {
+    const autoOn = process.env.AUTO_TRADE === 'true';
+    const agentsStr = process.env.ACTIVE_AGENTS || 'raichu';
+    const aliases = agentsStr.split(',').map((a) => a.trim()).filter(Boolean);
+
+    let msg = '🎮 <b>Otomatik işlem (Degen Claw)</b>\n\n';
+
+    if (autoOn) {
+      msg += '✅ <b>Durum:</b> AÇIK\n';
+      msg += 'Sinyallerde <b>güven HIGH</b> olduğunda sırayla bu agentlar işlem dener (round-robin).\n\n';
+    } else {
+      msg += '⛔ <b>Durum:</b> KAPALI\n';
+      msg += 'Şu an sadece sinyal üretilir / Telegram bildirimi gider; <b>otomatik emir gönderilmez</b>.\n';
+      msg += 'Açmak için Railway’de <code>AUTO_TRADE=true</code> yap ve yeniden deploy et.\n\n';
+    }
+
+    msg += '<b>ACTIVE_AGENTS</b> (sıra ile):\n';
+    for (const alias of aliases) {
+      const agent = getAgentByAlias(alias);
+      if (agent) {
+        msg += `• ${agent.label} (<code>${alias}</code>)\n`;
+      } else {
+        msg += `• <code>${alias}</code> (tanımsız alias)\n`;
+      }
+    }
+
+    msg += '\n<i>Not: MEDIUM sinyaller otomatik işlem açmaz; sadece HIGH.</i>\n';
+    msg += '<i>/active ile aynı liste; otomatik işlem için üstteki durum AÇIK olmalı.</i>';
+
+    await this.sendMessage(msg);
   }
 
   async sendAgentsList(chatId) {
