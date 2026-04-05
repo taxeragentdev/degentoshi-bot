@@ -1,10 +1,52 @@
 const API_BASE = "https://api.agdp.io/degen-acp";
-const POSITIONS_API = "https://dgclaw-app-production.up.railway.app/acp/positions";
+const POSITIONS_API = "https://dgclaw-app-production.up.railway.app/users";
 
 export class DegenClawTrader {
   constructor(agent) {
     this.agent = agent;
     this.apiKey = agent.apiKey;
+    this.walletAddress = agent.walletAddress;
+  }
+
+  async getAccountBalance() {
+    try {
+      const response = await fetch(`${POSITIONS_API}/${this.walletAddress}/account`, {
+        timeout: 10000
+      });
+      const data = await response.json();
+      
+      if (data.data && data.data.hlBalance) {
+        return {
+          success: true,
+          balance: parseFloat(data.data.hlBalance),
+          withdrawable: parseFloat(data.data.withdrawableBalance)
+        };
+      }
+      return { success: false, error: "No balance data" };
+    } catch (error) {
+      console.error(`[${this.agent.label}] Failed to fetch balance:`, error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async getPositions() {
+    try {
+      const response = await fetch(`${POSITIONS_API}/${this.walletAddress}/positions`, {
+        timeout: 10000
+      });
+      const data = await response.json();
+      
+      if (data.data) {
+        return {
+          success: true,
+          positions: data.data
+        };
+      }
+      return { success: false, error: "No position data" };
+    } catch (error) {
+      console.error(`[${this.agent.label}] Failed to fetch positions:`, error.message);
+      return { success: false, error: error.message };
+    }
   }
 
   calculateTPSL(entryPrice, tpPercent, slPercent, side) {
@@ -152,23 +194,20 @@ export class DegenClawTrader {
 
   async getPositions() {
     try {
-      const response = await fetch(`${POSITIONS_API}/${this.agent.walletAddress}`, {
+      const response = await fetch(`${POSITIONS_API}/${this.walletAddress}/positions`, {
         timeout: 10000
       });
-
       const data = await response.json();
       
-      if (data.account) {
-        return { 
-          success: true, 
-          balance: data.account.marginSummary,
-          positions: data.account.assetPositions || []
+      if (data.data) {
+        return {
+          success: true,
+          positions: data.data
         };
-      } else {
-        return { success: false, error: "No account data" };
       }
+      return { success: false, error: "No position data" };
     } catch (error) {
-      console.error(`[${this.agent.label}] ❌ Failed to fetch positions:`, error.message);
+      console.error(`[${this.agent.label}] Failed to fetch positions:`, error.message);
       return { success: false, error: error.message };
     }
   }

@@ -4,6 +4,30 @@ const HYPERLIQUID_API = "https://api.hyperliquid-testnet.xyz";
 export class HyperliquidDataFetcher {
   constructor() {
     this.apiUrl = HYPERLIQUID_API;
+    this.metaCache = null;
+    this.metaCacheTime = 0;
+  }
+
+  async fetchMeta() {
+    // Cache meta for 60 seconds
+    if (this.metaCache && Date.now() - this.metaCacheTime < 60000) {
+      return this.metaCache;
+    }
+
+    try {
+      const response = await fetch(`${this.apiUrl}/info`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'meta' })
+      });
+
+      this.metaCache = await response.json();
+      this.metaCacheTime = Date.now();
+      return this.metaCache;
+    } catch (error) {
+      console.error('Error fetching Hyperliquid meta:', error.message);
+      return null;
+    }
   }
 
   async fetchOHLCV(symbol, interval, limit = 300) {
@@ -11,7 +35,9 @@ export class HyperliquidDataFetcher {
       // Hyperliquid coin formatı (BTC/USDT -> BTC)
       const coin = symbol.split('/')[0];
       
-      // Interval mapping (1h -> 1h, 15m -> 15m, 5m -> 5m)
+      const endTime = Date.now();
+      const startTime = endTime - (limit * this.intervalToMs(interval));
+      
       const response = await fetch(`${this.apiUrl}/info`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -20,14 +46,15 @@ export class HyperliquidDataFetcher {
           req: {
             coin: coin,
             interval: interval,
-            startTime: Date.now() - (limit * this.intervalToMs(interval))
+            startTime: startTime,
+            endTime: endTime
           }
         })
       });
 
       const data = await response.json();
       
-      if (!data || !Array.isArray(data)) {
+      if (!data || !Array.isArray(data) || data.length === 0) {
         return null;
       }
 
@@ -37,27 +64,10 @@ export class HyperliquidDataFetcher {
         high: parseFloat(candle.h),
         low: parseFloat(candle.l),
         close: parseFloat(candle.c),
-        volume: parseFloat(candle.v)
+        volume: parseFloat(candle.v || 0)
       }));
     } catch (error) {
       console.error(`Error fetching OHLCV for ${symbol} ${interval}:`, error.message);
-      return null;
-    }
-  }
-
-  async fetchMeta() {
-    try {
-      const response = await fetch(`${this.apiUrl}/info`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'meta'
-        })
-      });
-
-      return await response.json();
-    } catch (error) {
-      console.error('Error fetching Hyperliquid meta:', error.message);
       return null;
     }
   }
@@ -67,9 +77,7 @@ export class HyperliquidDataFetcher {
       const response = await fetch(`${this.apiUrl}/info`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'allMids'
-        })
+        body: JSON.stringify({ type: 'allMids' })
       });
 
       return await response.json();
@@ -149,14 +157,8 @@ export class HyperliquidDataFetcher {
 
   async fetchMarketData(symbol) {
     try {
-      const [
-        candles1h,
-        candles15m,
-        candles5m,
-        fundingRate,
-        openInterest,
-        ticker
-      ] = await Promise.all([
+      // Parallel fetch with proper error handling
+      const results = await Promise.allSettled([
         this.fetchOHLCV(symbol, '1h', 250),
         this.fetchOHLCV(symbol, '15m', 150),
         this.fetchOHLCV(symbol, '5m', 100),
@@ -165,20 +167,24 @@ export class HyperliquidDataFetcher {
         this.fetchTicker(symbol)
       ]);
 
+      const [candles1h, candles15m, candles5m, fundingRate, openInterest, ticker] = results.map(r => 
+        r.status === 'fulfilled' ? r.value : null
+      );
+
       if (!candles1h || !candles15m || !candles5m || !ticker) {
         return null;
       }
 
       // Calculate volume from recent candles
-      const recentVolume = candles1h.slice(-24).reduce((sum, c) => sum + c.volume, 0);
+      const recentVolume = candles1h.slice(-24).reduce((sum, c) => sum + (c.volume || 0), 0);
 
       return {
         symbol,
         candles1h,
         candles15m,
         candles5m,
-        fundingRate: fundingRate.rate,
-        openInterest: openInterest.value,
+        fundingRate: fundingRate?.rate || 0,
+        openInterest: openInterest?.value || 0,
         currentPrice: ticker.last,
         volume: recentVolume,
         timestamp: Date.now()

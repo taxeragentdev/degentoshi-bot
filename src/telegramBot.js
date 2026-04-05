@@ -224,7 +224,7 @@ Hoş geldin! Bu bot otomatik olarak yüksek kaliteli kripto trading sinyalleri �
     const trader = new DegenClawTrader(agent);
     
     // Hyperliquid fiyatını al (Hyperliquid API'den)
-    const coinSymbol = coin.replace('/USDT', '');
+    const coinSymbol = coin.replace('/USDC', '');
     const priceResponse = await fetch('https://api.hyperliquid-testnet.xyz/info', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -314,20 +314,32 @@ Hoş geldin! Bu bot otomatik olarak yüksek kaliteli kripto trading sinyalleri �
     }
 
     const trader = new DegenClawTrader(agent);
-    const result = await trader.getPositions();
+    
+    // Gerçek balance'ı API'den al
+    const balanceResult = await trader.getAccountBalance();
+    const positionsResult = await trader.getPositions();
 
-    if (result.success) {
-      const balance = result.balance;
+    if (balanceResult.success) {
       let msg = `💰 <b>${agent.label} - Bakiye</b>\n\n`;
-      msg += `💵 Account Value: $${parseFloat(balance.accountValue).toFixed(2)}\n`;
-      msg += `📊 Margin Used: $${parseFloat(balance.totalMarginUsed).toFixed(2)}\n`;
-      msg += `📈 Total PnL: $${parseFloat(balance.totalNtlPos).toFixed(2)}\n`;
-      msg += `💎 Available: $${parseFloat(balance.totalRawUsd).toFixed(2)}\n\n`;
-      msg += `📦 Açık Pozisyon: ${result.positions.length}`;
+      msg += `💵 Balance: $${balanceResult.balance.toFixed(2)}\n`;
+      msg += `💎 Withdrawable: $${balanceResult.withdrawable.toFixed(2)}\n\n`;
+      
+      if (positionsResult.success) {
+        msg += `📦 Açık Pozisyon: ${positionsResult.positions.length}\n`;
+        
+        if (positionsResult.positions.length > 0) {
+          msg += '\n<b>Pozisyonlar:</b>\n';
+          for (const pos of positionsResult.positions) {
+            const pnl = parseFloat(pos.unrealizedPnl);
+            const pnlEmoji = pnl >= 0 ? '🟢' : '🔴';
+            msg += `${pnlEmoji} ${pos.pair} ${pos.side.toUpperCase()} | PnL: $${pnl.toFixed(2)}\n`;
+          }
+        }
+      }
 
       await this.sendMessage(msg);
     } else {
-      await this.sendMessage(`❌ Bakiye alınamadı: ${result.error}`);
+      await this.sendMessage(`❌ Bakiye alınamadı: ${balanceResult.error}`);
     }
   }
 
@@ -347,11 +359,10 @@ Hoş geldin! Bu bot otomatik olarak yüksek kaliteli kripto trading sinyalleri �
           msg += `👤 <b>${agent.label}</b>\n`;
           
           for (const pos of result.positions) {
-            const p = pos.position;
-            const pnl = parseFloat(p.unrealizedPnl);
+            const pnl = parseFloat(pos.unrealizedPnl);
             const pnlEmoji = pnl >= 0 ? '🟢' : '🔴';
             
-            msg += `  ${pnlEmoji} ${p.coin} | Entry: $${p.entryPx} | PnL: $${pnl.toFixed(2)}\n`;
+            msg += `  ${pnlEmoji} ${pos.pair} ${pos.side.toUpperCase()} ${pos.leverage}x | Entry: $${pos.entryPrice} | PnL: $${pnl.toFixed(2)}\n`;
             totalPositions++;
           }
           msg += '\n';
@@ -380,16 +391,16 @@ Hoş geldin! Bu bot otomatik olarak yüksek kaliteli kripto trading sinyalleri �
         let msg = `📊 <b>${agent.label} - Açık Pozisyonlar</b>\n\n`;
 
         for (const pos of result.positions) {
-          const p = pos.position;
-          const pnl = parseFloat(p.unrealizedPnl);
+          const pnl = parseFloat(pos.unrealizedPnl);
           const pnlEmoji = pnl >= 0 ? '🟢' : '🔴';
           
-          msg += `${pnlEmoji} <b>${p.coin}</b>\n`;
-          msg += `📊 Entry: $${p.entryPx}\n`;
-          msg += `💰 Size: ${p.szi}\n`;
-          msg += `⚡ Leverage: ${p.leverage.value}x\n`;
-          msg += `📈 PnL: $${pnl.toFixed(2)} (${(parseFloat(p.returnOnEquity) * 100).toFixed(2)}%)\n`;
-          msg += `🛑 Liquidation: $${p.liquidationPx}\n\n`;
+          msg += `${pnlEmoji} <b>${pos.pair} ${pos.side.toUpperCase()}</b>\n`;
+          msg += `📊 Entry: $${pos.entryPrice}\n`;
+          msg += `💰 Mark: $${pos.markPrice}\n`;
+          msg += `⚡ Leverage: ${pos.leverage}x\n`;
+          msg += `📈 PnL: $${pnl.toFixed(2)}\n`;
+          msg += `💵 Margin: $${pos.margin}\n`;
+          msg += `🛑 Liquidation: $${pos.liquidationPrice}\n\n`;
         }
 
         await this.sendMessage(msg);

@@ -4,6 +4,8 @@ import { CONFIG } from './config.js';
 import { TelegramBot } from './telegramBot.js';
 import { getAgentByAlias } from './degenClawAgents.js';
 import { DegenClawTrader } from './degenClawTrader.js';
+import fs from 'fs';
+import path from 'path';
 
 export class Scanner {
   constructor() {
@@ -20,7 +22,24 @@ export class Scanner {
     console.log('🚀 Starting Crypto Signal Bot...');
     console.log(`📊 Monitoring ${CONFIG.coins.length} coins`);
     console.log(`⏱️  Scan interval: ${CONFIG.scanInterval / 1000}s`);
-    console.log(`💰 Capital: $${CONFIG.capital}`);
+    
+    // Agent balance'larını göster
+    console.log('💰 Checking agent balances...');
+    const { getAgentByAlias, getAllAgents } = await import('./degenClawAgents.js');
+    const { DegenClawTrader } = await import('./degenClawTrader.js');
+    
+    const allAgents = getAllAgents();
+    let totalBalance = 0;
+    for (const agent of allAgents.slice(0, 3)) { // İlk 3 agent'ı göster
+      const trader = new DegenClawTrader(agent);
+      const balanceResult = await trader.getAccountBalance();
+      if (balanceResult.success) {
+        console.log(`   ${agent.alias}: $${balanceResult.balance.toFixed(2)}`);
+        totalBalance += balanceResult.balance;
+      }
+    }
+    console.log(`   ... (${allAgents.length} agents total)`);
+    
     console.log(`🎯 Risk per trade: ${CONFIG.riskPerTrade * 100}%`);
     console.log(`📈 Max open trades: ${CONFIG.maxOpenTrades}`);
     console.log(`🤖 Telegram bot: ACTIVE`);
@@ -33,7 +52,7 @@ export class Scanner {
       console.error('❌ Telegram bot error:', err);
     });
     
-    await this.telegramBot.sendMessage('🚀 <b>Kripto Sinyal Botu Başlatıldı!</b>\n\nSinyal taraması başladı. Yüksek kaliteli sinyaller Telegram\'a gönderilecek.');
+    await this.telegramBot.sendMessage('🚀 <b>Kripto Sinyal Botu Başlatıldı!</b>\n\nHyperliquid Testnet\'ten veri alınıyor.\nSinyal taraması başladı.');
     
     await this.scan();
   }
@@ -165,9 +184,6 @@ export class Scanner {
   }
   
   saveSignalToFile(signal) {
-    const fs = require('fs');
-    const path = require('path');
-    
     const signalsDir = path.join(process.cwd(), 'signals');
     if (!fs.existsSync(signalsDir)) {
       fs.mkdirSync(signalsDir, { recursive: true });

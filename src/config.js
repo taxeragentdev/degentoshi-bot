@@ -3,14 +3,14 @@ export const CONFIG = {
   scanInterval: parseInt(process.env.SCAN_INTERVAL_MS) || 60000,
   maxOpenTrades: parseInt(process.env.MAX_OPEN_TRADES) || 3,
   riskPerTrade: parseFloat(process.env.RISK_PER_TRADE) || 0.01,
-  capital: parseFloat(process.env.CAPITAL) || 10000,
+  capital: 0, // Will be fetched dynamically from agent balances
   
   coins: process.env.COINS?.split(',') || [
-    'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'DOGE/USDT',
-    'PENGU/USDT', 'HYPE/USDT', 'PEPE/USDT', 'POPCAT/USDT',
-    'BNB/USDT', 'XRP/USDT', 'ADA/USDT', 'AVAX/USDT',
-    'LINK/USDT', 'MATIC/USDT', 'DOT/USDT', 'UNI/USDT',
-    'ATOM/USDT', 'LTC/USDT', 'NEAR/USDT', 'APT/USDT'
+    'BTC/USDC', 'ETH/USDC', 'SOL/USDC', 'DOGE/USDC',
+    'PENGU/USDC', 'HYPE/USDC', 'PEPE/USDC', 'POPCAT/USDC',
+    'BNB/USDC', 'XRP/USDC', 'ADA/USDC', 'AVAX/USDC',
+    'LINK/USDC', 'MATIC/USDC', 'DOT/USDC', 'UNI/USDC',
+    'ATOM/USDC', 'LTC/USDC', 'NEAR/USDC', 'APT/USDC'
   ],
   
   timeframes: {
