@@ -246,7 +246,12 @@ Hoş geldin! Bot sürekli tarama yapar; Telegram’a sinyal gönderir. <b>Otomat
 
     let msg = '🎮 <b>Otomatik işlem (Degen Claw)</b>\n\n';
 
-    const tradeMin = (process.env.AUTO_TRADE_MIN_CONFIDENCE || 'HIGH').toUpperCase();
+    const tradeMin = CONFIG.autoTradeMinConfidence;
+    const telMin = CONFIG.telegramMinConfidence;
+    const explicitAuto =
+      process.env.AUTO_TRADE_MIN_CONFIDENCE != null &&
+      String(process.env.AUTO_TRADE_MIN_CONFIDENCE).trim() !== '';
+
     if (autoOn) {
       msg += '✅ <b>Durum:</b> AÇIK\n';
       msg += `Sinyal güveni <b>${tradeMin}</b> ve üzeriyse sırayla bu agentlar Degen Claw ile işlem dener (round-robin).\n\n`;
@@ -266,8 +271,12 @@ Hoş geldin! Bot sürekli tarama yapar; Telegram’a sinyal gönderir. <b>Otomat
       }
     }
 
-    msg += `\n<i>Otomatik emir eşiği: <code>AUTO_TRADE_MIN_CONFIDENCE=${tradeMin}</code> (HIGH veya MEDIUM).</i>\n`;
-    msg += '<i>MEDIUM sinyallerde de işlem istiyorsan Railway’de <code>AUTO_TRADE_MIN_CONFIDENCE=MEDIUM</code> yap.</i>';
+    msg += `\n📊 <b>Telegram eşik:</b> <code>${telMin}</code>\n`;
+    msg += `📊 <b>Otomatik emir eşik:</b> <code>${tradeMin}</code>`;
+    if (!explicitAuto) {
+      msg += ` <i>(AUTO_TRADE_MIN_CONFIDENCE boş → Telegram ile aynı)</i>`;
+    }
+    msg += `\n\n<i>Ayrı kısıtlamak için Railway’e <code>AUTO_TRADE_MIN_CONFIDENCE=HIGH</code> yaz (Telegram MEDIUM kalabilir).</i>`;
 
     await this.sendMessage(msg);
   }

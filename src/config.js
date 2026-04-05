@@ -13,8 +13,19 @@ export const CONFIG = {
   signalCooldownMs: parseInt(process.env.SIGNAL_COOLDOWN_MS, 10) || 4 * 60 * 60 * 1000,
   /** Telegram'a sadece bu güven ve üzeri: HIGH | MEDIUM (varsayılan HIGH = daha az spam) */
   telegramMinConfidence: (process.env.TELEGRAM_MIN_CONFIDENCE || 'HIGH').toUpperCase(),
-  /** Degen Claw otomatik emir: HIGH | MEDIUM (varsayılan HIGH; MEDIUM için env ile aç) */
-  autoTradeMinConfidence: (process.env.AUTO_TRADE_MIN_CONFIDENCE || 'HIGH').toUpperCase(),
+  /**
+   * Degen Claw otomatik emir eşiği.
+   * Boş bırakılırsa TELEGRAM_MIN_CONFIDENCE ile aynı (Railway'de sadece TELEGRAM=MEDIUM yeter).
+   * Farklı istiyorsan AUTO_TRADE_MIN_CONFIDENCE=HIGH gibi açıkça yaz.
+   */
+  autoTradeMinConfidence: (() => {
+    const raw = process.env.AUTO_TRADE_MIN_CONFIDENCE;
+    const telegram = (process.env.TELEGRAM_MIN_CONFIDENCE || 'HIGH').toUpperCase();
+    if (raw != null && String(raw).trim() !== '') {
+      return String(raw).trim().toUpperCase();
+    }
+    return telegram;
+  })(),
   
   coins: process.env.COINS?.split(',') || [
     'BTC/USDC', 'ETH/USDC', 'SOL/USDC', 'DOGE/USDC',
