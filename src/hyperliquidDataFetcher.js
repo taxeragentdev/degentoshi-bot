@@ -1,9 +1,8 @@
-// Hyperliquid Testnet API endpoints
-const HYPERLIQUID_API = "https://api.hyperliquid-testnet.xyz";
+import { CONFIG } from './config.js';
 
 export class HyperliquidDataFetcher {
   constructor() {
-    this.apiUrl = HYPERLIQUID_API;
+    this.apiUrl = CONFIG.hyperliquidApiUrl;
     this.metaCache = null;
     this.metaCacheTime = 0;
   }
@@ -58,7 +57,9 @@ export class HyperliquidDataFetcher {
         return null;
       }
 
-      return data.map(candle => ({
+      const sorted = [...data].sort((a, b) => a.t - b.t);
+
+      return sorted.map(candle => ({
         timestamp: candle.t,
         open: parseFloat(candle.o),
         high: parseFloat(candle.h),
@@ -132,12 +133,22 @@ export class HyperliquidDataFetcher {
   async fetchTicker(symbol) {
     try {
       const coin = symbol.split('/')[0];
-      
-      // İlk önce en son 5m candle'ı al (en güncel fiyat)
-      const recentCandles = await this.fetchOHLCV(symbol, '5m', 2);
-      
+
+      // Mid fiyat (HL UI / allMids) — gerçek piyasa ile uyumlu referans
+      const mids = await this.fetchAllMids();
+      if (mids && typeof mids === 'object' && mids[coin] != null && mids[coin] !== '') {
+        const mid = parseFloat(mids[coin]);
+        if (Number.isFinite(mid) && mid > 0) {
+          return {
+            last: mid,
+            volume: 0,
+            timestamp: Date.now()
+          };
+        }
+      }
+
+      const recentCandles = await this.fetchOHLCV(symbol, '5m', 3);
       if (recentCandles && recentCandles.length > 0) {
-        // En son tamamlanmış candle'ın close fiyatını kullan
         const lastCandle = recentCandles[recentCandles.length - 1];
         return {
           last: lastCandle.close,
@@ -145,25 +156,8 @@ export class HyperliquidDataFetcher {
           timestamp: lastCandle.timestamp
         };
       }
-      
-      // Fallback: allMids kullan
-      const mids = await this.fetchAllMids();
-      
-      if (!mids || typeof mids !== 'object') {
-        return null;
-      }
 
-      const price = mids[coin];
-      
-      if (!price) {
-        return null;
-      }
-
-      return {
-        last: parseFloat(price),
-        volume: 0,
-        timestamp: Date.now()
-      };
+      return null;
     } catch (error) {
       console.error(`Error fetching ticker for ${symbol}:`, error.message);
       return null;

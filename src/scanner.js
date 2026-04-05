@@ -17,9 +17,11 @@ export class Scanner {
     this.autoTrade = process.env.AUTO_TRADE === 'true';
     this.autoTradeAgent = process.env.AUTO_TRADE_AGENT || 'raichu';
     
-    // Sinyal cooldown: Her coin için son sinyal zamanı
     this.lastSignalTime = new Map();
-    this.signalCooldownMs = 3600000; // 1 saat (3600000ms)
+    this.signalCooldownMs = CONFIG.signalCooldownMs;
+    this.telegramMinConfidence = CONFIG.telegramMinConfidence;
+    this.cooldownPath = path.join(process.cwd(), 'data', 'signal_cooldown.json');
+    this.loadCooldownFromDisk();
     
     // Aktif trading agentları (virgülle ayrılmış)
     this.activeAgents = (process.env.ACTIVE_AGENTS || 'raichu').split(',').map(a => a.trim());
@@ -55,7 +57,9 @@ export class Scanner {
     if (this.autoTrade) {
       console.log(`👥 Active agents: ${this.activeAgents.join(', ')}`);
     }
-    console.log(`⏱️  Signal cooldown: ${this.signalCooldownMs / 60000} minutes per coin`);
+    console.log(`⏱️  Signal cooldown: ${(this.signalCooldownMs / 60000).toFixed(0)} min/coin (persisted)`);
+    console.log(`📡 Hyperliquid data: ${CONFIG.hyperliquidApiUrl}`);
+    console.log(`📵 Telegram min confidence: ${this.telegramMinConfidence}`);
     console.log('─'.repeat(80));
     
     this.isRunning = true;
@@ -64,7 +68,13 @@ export class Scanner {
       console.error('❌ Telegram bot error:', err);
     });
     
-    await this.telegramBot.sendMessage('🚀 <b>Kripto Sinyal Botu Başlatıldı!</b>\n\nHyperliquid Testnet\'ten veri alınıyor.\nSinyal taraması başladı.');
+    await this.telegramBot.sendMessage(
+      `🚀 <b>Kripto Sinyal Botu Başlatıldı!</b>\n\n` +
+      `📡 Veri: <code>${CONFIG.hyperliquidApiUrl}</code>\n` +
+      `⏱ Cooldown: ${(this.signalCooldownMs / 3600000).toFixed(1)} saat/coin\n` +
+      `📵 Telegram: min güven <b>${this.telegramMinConfidence}</b>\n\n` +
+      `Sinyal taraması başladı.`
+    );
     
     await this.scan();
   }
@@ -112,8 +122,9 @@ export class Scanner {
           
           signals.push(signal);
           this.lastSignalTime.set(coinSymbol, now);
+          this.saveCooldownToDisk();
           console.log(`✅ ${signal.action} signal!`);
-          this.outputSignal(signal);
+          await this.outputSignal(signal);
         } else {
           console.log('⏭️  No trade');
         }
@@ -138,6 +149,40 @@ export class Scanner {
     setTimeout(() => this.scan(), CONFIG.scanInterval);
   }
   
+  confidenceRank(c) {
+    const map = { HIGH: 2, MEDIUM: 1, LOW: 0 };
+    return c in map ? map[c] : 2;
+  }
+
+  shouldNotifyTelegram(signal) {
+    const min = this.telegramMinConfidence;
+    return this.confidenceRank(signal.confidence) >= this.confidenceRank(min);
+  }
+
+  loadCooldownFromDisk() {
+    try {
+      if (!fs.existsSync(this.cooldownPath)) return;
+      const raw = fs.readFileSync(this.cooldownPath, 'utf8');
+      const obj = JSON.parse(raw);
+      for (const [k, v] of Object.entries(obj)) {
+        const t = Number(v);
+        if (Number.isFinite(t)) this.lastSignalTime.set(k, t);
+      }
+    } catch (e) {
+      console.warn('Cooldown load:', e.message);
+    }
+  }
+
+  saveCooldownToDisk() {
+    try {
+      const dir = path.dirname(this.cooldownPath);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(this.cooldownPath, JSON.stringify(Object.fromEntries(this.lastSignalTime)));
+    } catch (e) {
+      console.warn('Cooldown save:', e.message);
+    }
+  }
+
   async outputSignal(signal) {
     console.log('\n' + '═'.repeat(80));
     console.log('🎯 TRADING SIGNAL GENERATED');
@@ -147,7 +192,11 @@ export class Scanner {
     
     this.saveSignalToFile(signal);
     
-    await this.telegramBot.sendSignal(signal);
+    if (this.shouldNotifyTelegram(signal)) {
+      await this.telegramBot.sendSignal(signal);
+    } else {
+      console.log(`📵 Telegram atlandı (min güven: ${this.telegramMinConfidence}, sinyal: ${signal.confidence})`);
+    }
     
     if (this.autoTrade && signal.action !== 'NO_TRADE' && signal.confidence === 'HIGH') {
       await this.executeAutoTrade(signal);

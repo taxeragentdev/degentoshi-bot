@@ -1,9 +1,10 @@
 import { AGENTS, getAgentByAlias, getAllAgents } from './degenClawAgents.js';
 import { DegenClawTrader } from './degenClawTrader.js';
+import { CONFIG } from './config.js';
 
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "8770019273:AAE0lTPVhB26s9c7XUSsEEqXoPzEpAewehg";
-const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "750170873";
-const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+const TELEGRAM_API = TELEGRAM_BOT_TOKEN ? `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}` : '';
 
 export class TelegramBot {
   constructor() {
@@ -13,6 +14,10 @@ export class TelegramBot {
   }
 
   async sendMessage(text, options = {}) {
+    if (!TELEGRAM_API || !this.chatId) {
+      console.warn('Telegram: TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID eksik');
+      return null;
+    }
     try {
       const response = await fetch(`${TELEGRAM_API}/sendMessage`, {
         method: 'POST',
@@ -62,6 +67,7 @@ export class TelegramBot {
   }
 
   async getUpdates() {
+    if (!TELEGRAM_API) return [];
     try {
       const response = await fetch(`${TELEGRAM_API}/getUpdates?offset=${this.lastUpdateId + 1}&timeout=30`);
       const data = await response.json();
@@ -239,48 +245,48 @@ Hoş geldin! Bu bot otomatik olarak yüksek kaliteli kripto trading sinyalleri �
     
     const trader = new DegenClawTrader(agent);
     
-    // Hyperliquid fiyatını al (OHLCV candle close - daha güvenilir)
-    const coinSymbol = coin.replace('/USDC', '');
-    
-    // İlk önce candle'lardan al
+    const coinSymbol = coin.replace('/USDC', '').replace(/^.*\//, '');
+    const hlInfo = `${CONFIG.hyperliquidApiUrl}/info`;
     let currentPrice = 0;
+
     try {
-      const candleResponse = await fetch('https://api.hyperliquid-testnet.xyz/info', {
+      const midsRes = await fetch(hlInfo, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'candleSnapshot',
-          req: {
-            coin: coinSymbol,
-            interval: '5m',
-            startTime: Date.now() - (2 * 5 * 60 * 1000), // Son 2 candle
-            endTime: Date.now()
-          }
-        })
+        body: JSON.stringify({ type: 'allMids' })
       });
-      const candleData = await candleResponse.json();
-      
-      if (candleData && candleData.length > 0) {
-        // En son candle'ın close fiyatı
-        const lastCandle = candleData[candleData.length - 1];
-        currentPrice = parseFloat(lastCandle.c);
+      const mids = await midsRes.json();
+      if (mids && mids[coinSymbol] != null) {
+        currentPrice = parseFloat(mids[coinSymbol]);
       }
     } catch (err) {
-      console.error('Candle price error:', err);
+      console.error('allMids price error:', err);
     }
-    
-    // Fallback: allMids
-    if (!currentPrice || currentPrice <= 0) {
+
+    if (!currentPrice || !Number.isFinite(currentPrice) || currentPrice <= 0) {
       try {
-        const priceResponse = await fetch('https://api.hyperliquid-testnet.xyz/info', {
+        const candleResponse = await fetch(hlInfo, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'allMids' })
+          body: JSON.stringify({
+            type: 'candleSnapshot',
+            req: {
+              coin: coinSymbol,
+              interval: '5m',
+              startTime: Date.now() - (2 * 5 * 60 * 1000),
+              endTime: Date.now()
+            }
+          })
         });
-        const priceData = await priceResponse.json();
-        currentPrice = parseFloat(priceData[coinSymbol] || 0);
+        const candleData = await candleResponse.json();
+
+        if (candleData && candleData.length > 0) {
+          const sorted = [...candleData].sort((a, b) => a.t - b.t);
+          const lastCandle = sorted[sorted.length - 1];
+          currentPrice = parseFloat(lastCandle.c);
+        }
       } catch (err) {
-        console.error('AllMids price error:', err);
+        console.error('Candle price error:', err);
       }
     }
     
@@ -534,6 +540,10 @@ Hoş geldin! Bu bot otomatik olarak yüksek kaliteli kripto trading sinyalleri �
   }
 
   async startPolling() {
+    if (!TELEGRAM_API) {
+      console.warn('Telegram polling kapalı (TELEGRAM_BOT_TOKEN yok)');
+      return;
+    }
     console.log('🤖 Telegram bot polling started...');
 
     while (true) {

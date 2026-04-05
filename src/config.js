@@ -1,9 +1,18 @@
+/** Hyperliquid mainnet = gerçek piyasa fiyatları; testnet fiyatları piyasadan sapar. */
+const DEFAULT_HL_API = 'https://api.hyperliquid.xyz';
+
 export const CONFIG = {
-  exchange: 'hyperliquid', // Hyperliquid Testnet
+  exchange: 'hyperliquid',
+  /** Market data kaynağı: varsayılan mainnet (CoinGlass / HL UI ile uyumlu fiyatlar) */
+  hyperliquidApiUrl: (process.env.HYPERLIQUID_API_URL || DEFAULT_HL_API).replace(/\/$/, ''),
   scanInterval: parseInt(process.env.SCAN_INTERVAL_MS) || 60000,
   maxOpenTrades: parseInt(process.env.MAX_OPEN_TRADES) || 3,
   riskPerTrade: parseFloat(process.env.RISK_PER_TRADE) || 0.01,
   capital: 0, // Will be fetched dynamically from agent balances
+  /** Aynı coin için tekrar Telegram / dosya sinyali (ms). Varsayılan 4 saat. */
+  signalCooldownMs: parseInt(process.env.SIGNAL_COOLDOWN_MS, 10) || 4 * 60 * 60 * 1000,
+  /** Telegram'a sadece bu güven ve üzeri: HIGH | MEDIUM (varsayılan HIGH = daha az spam) */
+  telegramMinConfidence: (process.env.TELEGRAM_MIN_CONFIDENCE || 'HIGH').toUpperCase(),
   
   coins: process.env.COINS?.split(',') || [
     'BTC/USDC', 'ETH/USDC', 'SOL/USDC', 'DOGE/USDC',
@@ -56,8 +65,8 @@ export const CONFIG = {
       shortMax: 75      // 70'ten 75'e çıkardık
     },
     confidence: {
-      high: 5,          // 6'dan 5'e düşürdük (daha kolay HIGH)
-      medium: 3         // 4'ten 3'e düşürdük (daha kolay MEDIUM)
+      high: 6,
+      medium: 4
     },
     volumeSpike: 1.3,   // 1.5'ten 1.3'e (daha hassas)
     oiChangeMin: 0.03   // 0.05'ten 0.03'e (daha hassas)

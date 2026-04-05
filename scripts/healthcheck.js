@@ -1,9 +1,14 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+const HL_API = (process.env.HYPERLIQUID_API_URL || 'https://api.hyperliquid.xyz').replace(/\/$/, '');
 
 console.log('🏥 System Health Check\n');
 console.log('═'.repeat(60));
@@ -32,9 +37,9 @@ try {
   console.log('   Run: npm install');
 }
 
-console.log('\n3️⃣  Testing Hyperliquid connection...');
+console.log(`\n3️⃣  Testing Hyperliquid (${HL_API})...`);
 try {
-  const response = await fetch('https://api.hyperliquid-testnet.xyz/info', {
+  const response = await fetch(`${HL_API}/info`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ type: 'meta' })
@@ -49,7 +54,7 @@ try {
 
 console.log('\n4️⃣  Testing data fetch from Hyperliquid...');
 try {
-  const response = await fetch('https://api.hyperliquid-testnet.xyz/info', {
+  const response = await fetch(`${HL_API}/info`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ type: 'allMids' })
