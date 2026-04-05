@@ -220,12 +220,23 @@ Hoş geldin! Bu bot otomatik olarak yüksek kaliteli kripto trading sinyalleri �
     }
 
     await this.sendMessage(`⏳ ${agent.label} için ${side.toUpperCase()} ${coin} pozisyonu açılıyor...`);
-
+    
     const trader = new DegenClawTrader(agent);
     
-    const currentPriceResponse = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${coin}USDT`);
-    const priceData = await currentPriceResponse.json();
-    const currentPrice = parseFloat(priceData.price);
+    // Hyperliquid fiyatını al (Hyperliquid API'den)
+    const coinSymbol = coin.replace('/USDT', '');
+    const priceResponse = await fetch('https://api.hyperliquid-testnet.xyz/info', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'allMids' })
+    });
+    const priceData = await priceResponse.json();
+    const currentPrice = parseFloat(priceData[coinSymbol] || 0);
+    
+    if (!currentPrice) {
+      await this.sendMessage(`❌ ${coin} fiyatı alınamadı (Hyperliquid)`);
+      return;
+    }
 
     const result = await trader.executeWithRetry(() => 
       trader.openPosition({

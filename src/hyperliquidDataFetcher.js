@@ -1,0 +1,203 @@
+// Hyperliquid Testnet API endpoints
+const HYPERLIQUID_API = "https://api.hyperliquid-testnet.xyz";
+
+export class HyperliquidDataFetcher {
+  constructor() {
+    this.apiUrl = HYPERLIQUID_API;
+  }
+
+  async fetchOHLCV(symbol, interval, limit = 300) {
+    try {
+      // Hyperliquid coin formatı (BTC/USDT -> BTC)
+      const coin = symbol.split('/')[0];
+      
+      // Interval mapping (1h -> 1h, 15m -> 15m, 5m -> 5m)
+      const response = await fetch(`${this.apiUrl}/info`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'candleSnapshot',
+          req: {
+            coin: coin,
+            interval: interval,
+            startTime: Date.now() - (limit * this.intervalToMs(interval))
+          }
+        })
+      });
+
+      const data = await response.json();
+      
+      if (!data || !Array.isArray(data)) {
+        return null;
+      }
+
+      return data.map(candle => ({
+        timestamp: candle.t,
+        open: parseFloat(candle.o),
+        high: parseFloat(candle.h),
+        low: parseFloat(candle.l),
+        close: parseFloat(candle.c),
+        volume: parseFloat(candle.v)
+      }));
+    } catch (error) {
+      console.error(`Error fetching OHLCV for ${symbol} ${interval}:`, error.message);
+      return null;
+    }
+  }
+
+  async fetchMeta() {
+    try {
+      const response = await fetch(`${this.apiUrl}/info`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'meta'
+        })
+      });
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching Hyperliquid meta:', error.message);
+      return null;
+    }
+  }
+
+  async fetchAllMids() {
+    try {
+      const response = await fetch(`${this.apiUrl}/info`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'allMids'
+        })
+      });
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error fetching all mids:', error.message);
+      return null;
+    }
+  }
+
+  async fetchFundingRate(symbol) {
+    try {
+      const coin = symbol.split('/')[0];
+      const meta = await this.fetchMeta();
+      
+      if (!meta || !meta.universe) {
+        return { rate: 0, timestamp: Date.now() };
+      }
+
+      const coinData = meta.universe.find(u => u.name === coin);
+      
+      return {
+        rate: coinData?.funding ? parseFloat(coinData.funding) : 0,
+        timestamp: Date.now()
+      };
+    } catch (error) {
+      console.error(`Error fetching funding rate for ${symbol}:`, error.message);
+      return { rate: 0, timestamp: Date.now() };
+    }
+  }
+
+  async fetchOpenInterest(symbol) {
+    try {
+      const coin = symbol.split('/')[0];
+      const meta = await this.fetchMeta();
+      
+      if (!meta || !meta.universe) {
+        return { value: 0, timestamp: Date.now() };
+      }
+
+      const coinData = meta.universe.find(u => u.name === coin);
+      
+      return {
+        value: coinData?.openInterest ? parseFloat(coinData.openInterest) : 0,
+        timestamp: Date.now()
+      };
+    } catch (error) {
+      console.error(`Error fetching open interest for ${symbol}:`, error.message);
+      return { value: 0, timestamp: Date.now() };
+    }
+  }
+
+  async fetchTicker(symbol) {
+    try {
+      const coin = symbol.split('/')[0];
+      const mids = await this.fetchAllMids();
+      
+      if (!mids || typeof mids !== 'object') {
+        return null;
+      }
+
+      const price = mids[coin];
+      
+      if (!price) {
+        return null;
+      }
+
+      return {
+        last: parseFloat(price),
+        volume: 0, // Will be calculated from candles
+        timestamp: Date.now()
+      };
+    } catch (error) {
+      console.error(`Error fetching ticker for ${symbol}:`, error.message);
+      return null;
+    }
+  }
+
+  async fetchMarketData(symbol) {
+    try {
+      const [
+        candles1h,
+        candles15m,
+        candles5m,
+        fundingRate,
+        openInterest,
+        ticker
+      ] = await Promise.all([
+        this.fetchOHLCV(symbol, '1h', 250),
+        this.fetchOHLCV(symbol, '15m', 150),
+        this.fetchOHLCV(symbol, '5m', 100),
+        this.fetchFundingRate(symbol),
+        this.fetchOpenInterest(symbol),
+        this.fetchTicker(symbol)
+      ]);
+
+      if (!candles1h || !candles15m || !candles5m || !ticker) {
+        return null;
+      }
+
+      // Calculate volume from recent candles
+      const recentVolume = candles1h.slice(-24).reduce((sum, c) => sum + c.volume, 0);
+
+      return {
+        symbol,
+        candles1h,
+        candles15m,
+        candles5m,
+        fundingRate: fundingRate.rate,
+        openInterest: openInterest.value,
+        currentPrice: ticker.last,
+        volume: recentVolume,
+        timestamp: Date.now()
+      };
+    } catch (error) {
+      console.error(`Error fetching market data for ${symbol}:`, error.message);
+      return null;
+    }
+  }
+
+  intervalToMs(interval) {
+    const map = {
+      '1m': 60 * 1000,
+      '5m': 5 * 60 * 1000,
+      '15m': 15 * 60 * 1000,
+      '1h': 60 * 60 * 1000,
+      '4h': 4 * 60 * 60 * 1000,
+      '1d': 24 * 60 * 60 * 1000
+    };
+    return map[interval] || 60 * 1000;
+  }
+}

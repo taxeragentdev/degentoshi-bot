@@ -1,15 +1,16 @@
 export const CONFIG = {
-  exchange: process.env.EXCHANGE || 'binance',
+  exchange: 'hyperliquid', // Hyperliquid Testnet
   scanInterval: parseInt(process.env.SCAN_INTERVAL_MS) || 60000,
   maxOpenTrades: parseInt(process.env.MAX_OPEN_TRADES) || 3,
   riskPerTrade: parseFloat(process.env.RISK_PER_TRADE) || 0.01,
   capital: parseFloat(process.env.CAPITAL) || 10000,
   
   coins: process.env.COINS?.split(',') || [
-    'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT',
-    'ADA/USDT', 'DOGE/USDT', 'MATIC/USDT', 'DOT/USDT', 'AVAX/USDT',
-    'LINK/USDT', 'UNI/USDT', 'ATOM/USDT', 'LTC/USDT', 'NEAR/USDT',
-    'APT/USDT', 'ARB/USDT', 'OP/USDT', 'INJ/USDT', 'TIA/USDT'
+    'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'DOGE/USDT',
+    'PENGU/USDT', 'HYPE/USDT', 'PEPE/USDT', 'POPCAT/USDT',
+    'BNB/USDT', 'XRP/USDT', 'ADA/USDT', 'AVAX/USDT',
+    'LINK/USDT', 'MATIC/USDT', 'DOT/USDT', 'UNI/USDT',
+    'ATOM/USDT', 'LTC/USDT', 'NEAR/USDT', 'APT/USDT'
   ],
   
   timeframes: {

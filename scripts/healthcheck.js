@@ -1,4 +1,9 @@
-import { DataFetcher } from '../src/dataFetcher.js';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 console.log('🏥 System Health Check\n');
 console.log('═'.repeat(60));
@@ -27,25 +32,35 @@ try {
   console.log('   Run: npm install');
 }
 
-console.log('\n3️⃣  Testing exchange connection...');
+console.log('\n3️⃣  Testing Hyperliquid connection...');
 try {
-  const fetcher = new DataFetcher();
-  await fetcher.exchange.loadMarkets();
-  checks.exchangeConnection = true;
-  console.log('   Exchange connection ✅');
+  const response = await fetch('https://api.hyperliquid-testnet.xyz/info', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: 'meta' })
+  });
+  const data = await response.json();
+  checks.exchangeConnection = data && data.universe;
+  console.log('   Hyperliquid connection ✅');
 } catch (error) {
-  console.log('   Exchange connection ❌');
+  console.log('   Hyperliquid connection ❌');
   console.log(`   Error: ${error.message}`);
 }
 
-console.log('\n4️⃣  Testing data fetch...');
+console.log('\n4️⃣  Testing data fetch from Hyperliquid...');
 try {
-  const fetcher = new DataFetcher();
-  const data = await fetcher.fetchOHLCV('BTC/USDT', '1h', 10);
-  checks.dataFetch = data && data.length > 0;
-  console.log(`   Data fetch ${checks.dataFetch ? '✅' : '❌'}`);
+  const response = await fetch('https://api.hyperliquid-testnet.xyz/info', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: 'allMids' })
+  });
+  const data = await response.json();
+  checks.dataFetch = data && data.BTC;
   if (checks.dataFetch) {
-    console.log(`   Latest BTC price: $${data[data.length - 1].close.toFixed(2)}`);
+    console.log(`   Data fetch ✅`);
+    console.log(`   Latest BTC price: $${parseFloat(data.BTC).toFixed(2)}`);
+  } else {
+    console.log('   Data fetch ❌');
   }
 } catch (error) {
   console.log('   Data fetch ❌');
