@@ -17,7 +17,8 @@ const checks = {
   nodeVersion: false,
   dependencies: false,
   exchangeConnection: false,
-  dataFetch: false
+  dataFetch: false,
+  degenAcp: false
 };
 
 console.log('1️⃣  Checking Node.js version...');
@@ -72,6 +73,39 @@ try {
   console.log(`   Error: ${error.message}`);
 }
 
+console.log('\n5️⃣  Virtuals ACP (claw-api.virtuals.io / Degen Claw) erişimi...');
+if (process.env.HEALTH_SKIP_DEGEN === 'true') {
+  checks.degenAcp = true;
+  console.log('   Atlandı (HEALTH_SKIP_DEGEN=true) ⚠️');
+} else {
+  try {
+    const { fetchWithTimeout } = await import('../src/httpFetch.js');
+    const acpUrl = (
+      process.env.DEGEN_ACP_API_URL ||
+      process.env.ACP_API_URL ||
+      'https://claw-api.virtuals.io'
+    ).replace(/\/$/, '');
+    const r = await fetchWithTimeout(`${acpUrl}/acp/jobs`, {
+      method: 'POST',
+      timeoutMs: 20_000,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    });
+    checks.degenAcp = r.status < 500;
+    console.log(
+      `   HTTP ${r.status} — Virtuals ACP (${acpUrl}) erişilebilir (401/422 token gövdesi normal) ${
+        checks.degenAcp ? '✅' : '❌'
+      }`
+    );
+  } catch (error) {
+    console.log('   Degen ACP ❌');
+    console.log(`   ${error.message}${error.cause ? ` — ${error.cause.message}` : ''}`);
+    console.log('   → DNS / ağ: NODE_OPTIONS=--dns-result-order=ipv4first');
+    console.log('   → Eski api.agdp.io kullanıyorsan DEGEN_ACP_API_URL ile claw-api.virtuals.io kullan');
+    console.log('   → Sadece sinyal testi: HEALTH_SKIP_DEGEN=true');
+  }
+}
+
 console.log('\n' + '═'.repeat(60));
 console.log('📊 Health Check Summary\n');
 
@@ -96,6 +130,10 @@ if (allPassed) {
   }
   if (!checks.dataFetch) {
     console.log('→ Verify exchange API is working');
+  }
+  if (!checks.degenAcp) {
+    console.log('→ Degen Claw ACP erişilemiyor; otomatik işlem açılamaz');
+    console.log('→ NODE_OPTIONS=--dns-result-order=ipv4first veya firewall kontrolü');
   }
   
   console.log();
