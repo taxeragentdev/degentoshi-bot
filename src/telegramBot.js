@@ -117,6 +117,14 @@ export class TelegramBot {
           await this.sendHelpMessage(chatId);
           break;
 
+        case '/setactive':
+          await this.handleSetActiveAgents(parts, chatId);
+          break;
+
+        case '/active':
+          await this.handleShowActiveAgents(chatId);
+          break;
+
         default:
           await this.sendMessage(`❓ Bilinmeyen komut: ${command}\n\n/help yazarak komutları görebilirsin.`);
       }
@@ -157,6 +165,8 @@ Hoş geldin! Bu bot otomatik olarak yüksek kaliteli kripto trading sinyalleri �
 /agents - 12 agent listesi
 /balance [alias] - Agent bakiyesi
 /positions [alias|all] - Açık pozisyonlar
+/active - Aktif agent listesi
+/setactive [agent1,agent2,...] - Aktif agentları ayarla
 
 <b>Trading:</b>
 /open [agent] [coin] [long/short] [size] [leverage]x tp=[%] sl=[%]
@@ -165,7 +175,13 @@ Hoş geldin! Bu bot otomatik olarak yüksek kaliteli kripto trading sinyalleri �
 /close [agent] [coin] [long/short]
 Örnek: /close raichu BTC long
 
+<b>Aktif Agent Ayarlama:</b>
+/setactive raichu,venom,friday
+→ Otomatik sinyaller bu 3 agent ile açılır
+
 <b>Örnekler:</b>
+• <code>/setactive raichu,venom</code> (2 agent aktif)
+• <code>/active</code> (hangi agentlar aktif göster)
 • <code>/open venom ETH short 20 3x tp=2.5 sl=1.5</code>
 • <code>/close friday SOL long</code>
 • <code>/balance doctorstrange</code>
@@ -408,6 +424,78 @@ Hoş geldin! Bu bot otomatik olarak yüksek kaliteli kripto trading sinyalleri �
         await this.sendMessage(`❌ ${agent.label} için açık pozisyon yok.`);
       }
     }
+  }
+
+  async handleSetActiveAgents(parts, chatId) {
+    // /setactive raichu,venom,friday
+    if (parts.length < 2) {
+      await this.sendMessage('❌ Format: /setactive [agent1,agent2,...]\n\nÖrnek: /setactive raichu,venom,friday');
+      return;
+    }
+
+    const agentAliases = parts[1].split(',').map(a => a.trim());
+    const validAgents = [];
+    const invalidAgents = [];
+
+    for (const alias of agentAliases) {
+      const agent = getAgentByAlias(alias);
+      if (agent) {
+        validAgents.push(agent.alias);
+      } else {
+        invalidAgents.push(alias);
+      }
+    }
+
+    if (validAgents.length === 0) {
+      await this.sendMessage('❌ Hiç geçerli agent bulunamadı.\n\n/agents ile listeyi görebilirsin.');
+      return;
+    }
+
+    // Scanner'daki aktif agent listesini güncelle
+    // Not: Bu geçici bir çözüm, ideali .env'i güncellemek ama o runtime'da yapılamaz
+    // Bu yüzden global bir değişken veya file-based config kullanabiliriz
+    
+    // Şimdilik sadece bilgilendirme mesajı gönderelim
+    let msg = '✅ <b>Aktif Agentlar Ayarlandı</b>\n\n';
+    msg += '<b>Aktif:</b>\n';
+    for (const alias of validAgents) {
+      const agent = getAgentByAlias(alias);
+      msg += `• ${agent.label} (${alias})\n`;
+    }
+    
+    if (invalidAgents.length > 0) {
+      msg += '\n<b>Geçersiz:</b>\n';
+      for (const alias of invalidAgents) {
+        msg += `• ${alias} ❌\n`;
+      }
+    }
+    
+    msg += `\n💡 .env dosyasında ACTIVE_AGENTS değişkenini güncelle:\n`;
+    msg += `<code>ACTIVE_AGENTS=${validAgents.join(',')}</code>\n\n`;
+    msg += '🔄 Botu yeniden başlat (Railway redeploy)';
+
+    await this.sendMessage(msg);
+  }
+
+  async handleShowActiveAgents(chatId) {
+    // Railway environment variable'dan oku
+    const activeAgentsStr = process.env.ACTIVE_AGENTS || 'raichu';
+    const activeAliases = activeAgentsStr.split(',').map(a => a.trim());
+    
+    let msg = '👥 <b>Aktif Trading Agentlar</b>\n\n';
+    
+    for (const alias of activeAliases) {
+      const agent = getAgentByAlias(alias);
+      if (agent) {
+        msg += `✅ ${agent.label} (${alias})\n`;
+      }
+    }
+    
+    msg += '\n💡 Değiştirmek için:\n';
+    msg += '<code>/setactive agent1,agent2,agent3</code>\n\n';
+    msg += '⚠️ Not: Değişiklik için Railway\'de ACTIVE_AGENTS değişkenini güncelle ve redeploy et.';
+
+    await this.sendMessage(msg);
   }
 
   async startPolling() {

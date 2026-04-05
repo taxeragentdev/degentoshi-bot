@@ -16,6 +16,14 @@ export class Scanner {
     this.scanCount = 0;
     this.autoTrade = process.env.AUTO_TRADE === 'true';
     this.autoTradeAgent = process.env.AUTO_TRADE_AGENT || 'raichu';
+    
+    // Sinyal cooldown: Her coin için son sinyal zamanı
+    this.lastSignalTime = new Map();
+    this.signalCooldownMs = 3600000; // 1 saat (3600000ms)
+    
+    // Aktif trading agentları (virgülle ayrılmış)
+    this.activeAgents = (process.env.ACTIVE_AGENTS || 'raichu').split(',').map(a => a.trim());
+    this.currentAgentIndex = 0;
   }
   
   async start() {
@@ -43,7 +51,11 @@ export class Scanner {
     console.log(`🎯 Risk per trade: ${CONFIG.riskPerTrade * 100}%`);
     console.log(`📈 Max open trades: ${CONFIG.maxOpenTrades}`);
     console.log(`🤖 Telegram bot: ACTIVE`);
-    console.log(`🎮 Auto-trade: ${this.autoTrade ? 'ENABLED (' + this.autoTradeAgent + ')' : 'DISABLED'}`);
+    console.log(`🎮 Auto-trade: ${this.autoTrade ? 'ENABLED' : 'DISABLED'}`);
+    if (this.autoTrade) {
+      console.log(`👥 Active agents: ${this.activeAgents.join(', ')}`);
+    }
+    console.log(`⏱️  Signal cooldown: ${this.signalCooldownMs / 60000} minutes per coin`);
     console.log('─'.repeat(80));
     
     this.isRunning = true;
@@ -88,7 +100,18 @@ export class Scanner {
         const signal = this.signalEngine.generateSignal(marketData);
         
         if (signal.action !== 'NO_TRADE') {
+          // Cooldown kontrolü - aynı coin için 1 saat içinde tekrar sinyal verme
+          const lastTime = this.lastSignalTime.get(coinSymbol);
+          const now = Date.now();
+          
+          if (lastTime && (now - lastTime) < this.signalCooldownMs) {
+            const remainingMinutes = Math.ceil((this.signalCooldownMs - (now - lastTime)) / 60000);
+            console.log(`⏸️  Cooldown (${remainingMinutes}m remaining)`);
+            continue;
+          }
+          
           signals.push(signal);
+          this.lastSignalTime.set(coinSymbol, now);
           console.log(`✅ ${signal.action} signal!`);
           this.outputSignal(signal);
         } else {
@@ -132,10 +155,19 @@ export class Scanner {
   }
   
   async executeAutoTrade(signal) {
-    const agent = getAgentByAlias(this.autoTradeAgent);
+    if (this.activeAgents.length === 0) {
+      console.log('❌ AUTO-TRADE: No active agents configured');
+      return;
+    }
+    
+    // Round-robin: Her sinyalde farklı agent kullan
+    const agentAlias = this.activeAgents[this.currentAgentIndex];
+    this.currentAgentIndex = (this.currentAgentIndex + 1) % this.activeAgents.length;
+    
+    const agent = getAgentByAlias(agentAlias);
     
     if (!agent) {
-      console.error(`❌ Auto-trade agent not found: ${this.autoTradeAgent}`);
+      console.error(`❌ AUTO-TRADE: Agent not found: ${agentAlias}`);
       return;
     }
     
@@ -143,10 +175,21 @@ export class Scanner {
     
     const trader = new DegenClawTrader(agent);
     
+    // Agent'ın gerçek balance'ını kontrol et
+    const balanceResult = await trader.getAccountBalance();
+    if (!balanceResult.success) {
+      console.error(`❌ AUTO-TRADE: Failed to get balance for ${agent.label}`);
+      return;
+    }
+    
+    const availableBalance = balanceResult.balance;
+    console.log(`💰 ${agent.label} balance: $${availableBalance.toFixed(2)}`);
+    
     const tpPercent = ((signal.take_profit[1] - signal.entry) / signal.entry) * 100;
     const slPercent = Math.abs((signal.stop_loss - signal.entry) / signal.entry) * 100;
     
-    const size = Math.max(15, CONFIG.capital * CONFIG.riskPerTrade);
+    // Pozisyon boyutunu agent balance'ına göre hesapla
+    const size = Math.max(15, Math.min(availableBalance * 0.2, 100)); // Balance'ın %20'si, max 100 USDC
     
     const result = await trader.executeWithRetry(() =>
       trader.openPosition({
