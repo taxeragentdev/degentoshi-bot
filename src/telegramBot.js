@@ -42,12 +42,12 @@ export class TelegramBot {
     }
   }
 
-  async sendSignal(signal) {
-    if (signal.action === 'NO_TRADE') return;
+  formatSignalBlock(signal) {
+    if (signal.action === 'NO_TRADE') return '';
 
     const emoji = signal.action === 'LONG' ? '🟢' : '🔴';
     const confidence = signal.confidence === 'HIGH' ? '⭐⭐⭐' : '⭐⭐';
-    
+
     let message = `${emoji} <b>${signal.action} ${signal.coin}</b> ${confidence}\n\n`;
     message += `📊 <b>Entry:</b> $${signal.entry.toLocaleString()}\n`;
     message += `🛑 <b>Stop Loss:</b> $${signal.stop_loss.toLocaleString()}\n`;
@@ -62,8 +62,42 @@ export class TelegramBot {
     message += `💡 <b>Reason:</b> ${signal.reason}\n`;
     message += `⏱ <b>Timeframe:</b> ${signal.timeframe}\n\n`;
     message += `🕐 ${new Date(signal.timestamp).toLocaleString()}`;
+    return message;
+  }
 
-    await this.sendMessage(message);
+  async sendSignal(signal) {
+    if (signal.action === 'NO_TRADE') return;
+    await this.sendMessage(this.formatSignalBlock(signal));
+  }
+
+  /**
+   * Otomatik işlem başarılı: sinyal özeti + işleme giren agent
+   */
+  async sendAutoTradeSuccess(signal, { agentLabel, agentAlias, size, perpPair }) {
+    const sideEmoji = signal.action === 'LONG' ? '🟢' : '🔴';
+    let msg = `✅ <b>Otomatik işlem açıldı</b>\n\n`;
+    msg += `<b>İşleme giren agent</b>\n`;
+    msg += `👤 ${agentLabel} (<code>${agentAlias}</code>)\n`;
+    msg += `${sideEmoji} <b>${signal.action}</b> <code>${perpPair}</code>\n`;
+    msg += `💰 Boyut: $${size.toFixed(2)} · ⚡ ${signal.leverage}x\n\n`;
+    msg += `<b>Sinyal özeti</b>\n`;
+    msg += this.formatSignalBlock(signal);
+    await this.sendMessage(msg);
+  }
+
+  /**
+   * Aynı coinde tüm aktif agentlarda zaten pozisyon var
+   */
+  async sendAutoTradeSkippedAllHolding(signal, holders) {
+    let msg = `⏭ <b>Otomatik işlem açılmadı</b>\n\n`;
+    msg += `<code>${signal.coin}</code> için aktif agentların <b>hepsinde</b> bu coinde açık pozisyon var; ikinci kez girilmedi.\n\n`;
+    msg += `<b>Mevcut pozisyonlar:</b>\n`;
+    for (const h of holders) {
+      msg += `• ${h.label} (<code>${h.alias}</code>): ${h.pair} ${String(h.side).toUpperCase()}\n`;
+    }
+    msg += `\n<i>Sinyal özeti:</i>\n`;
+    msg += this.formatSignalBlock(signal);
+    await this.sendMessage(msg);
   }
 
   async getUpdates() {

@@ -152,6 +152,12 @@ export class DegenClawTrader {
     }
   }
 
+  /** Perp pair'den baz coin (BTC/USDC -> BTC) */
+  static baseCoinFromPair(pair) {
+    if (!pair) return '';
+    return String(pair).toUpperCase().split('/')[0].split(':')[0];
+  }
+
   async modifyPosition({ pair, side, leverage, takeProfit, stopLoss }) {
     const payload = {
       service: "perp_modify",
@@ -188,26 +194,6 @@ export class DegenClawTrader {
       }
     } catch (error) {
       console.error(`[${this.agent.label}] ❌ Exception:`, error.message);
-      return { success: false, error: error.message };
-    }
-  }
-
-  async getPositions() {
-    try {
-      const response = await fetch(`${POSITIONS_API}/${this.walletAddress}/positions`, {
-        timeout: 10000
-      });
-      const data = await response.json();
-      
-      if (data.data) {
-        return {
-          success: true,
-          positions: data.data
-        };
-      }
-      return { success: false, error: "No position data" };
-    } catch (error) {
-      console.error(`[${this.agent.label}] Failed to fetch positions:`, error.message);
       return { success: false, error: error.message };
     }
   }

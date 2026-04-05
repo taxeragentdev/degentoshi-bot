@@ -203,74 +203,136 @@ export class Scanner {
     }
   }
   
+  async selectAgentWithoutCoinPosition(signal) {
+    const coinBase = signal.coin.toUpperCase();
+    const n = this.activeAgents.length;
+    const holders = [];
+    let apiFailures = 0;
+
+    for (let i = 0; i < n; i++) {
+      const idx = (this.currentAgentIndex + i) % n;
+      const alias = this.activeAgents[idx];
+      const agent = getAgentByAlias(alias);
+      if (!agent) continue;
+
+      const trader = new DegenClawTrader(agent);
+      const posResult = await trader.getPositions();
+
+      if (!posResult.success || !Array.isArray(posResult.positions)) {
+        apiFailures++;
+        console.warn(`AUTO-TRADE: getPositions failed for ${alias}`);
+        continue;
+      }
+
+      const hasCoin = posResult.positions.some(
+        (p) => DegenClawTrader.baseCoinFromPair(p.pair) === coinBase
+      );
+
+      if (hasCoin) {
+        const pos = posResult.positions.find(
+          (p) => DegenClawTrader.baseCoinFromPair(p.pair) === coinBase
+        );
+        holders.push({
+          label: agent.label,
+          alias,
+          pair: pos.pair,
+          side: pos.side
+        });
+        continue;
+      }
+
+      this.currentAgentIndex = (idx + 1) % n;
+      return { agent, trader, alias, holders: [], reason: null };
+    }
+
+    if (apiFailures === n) {
+      return { agent: null, trader: null, alias: null, holders: [], reason: 'positions_api_failed' };
+    }
+    if (holders.length > 0) {
+      return { agent: null, trader: null, alias: null, holders, reason: 'all_holding' };
+    }
+    return { agent: null, trader: null, alias: null, holders: [], reason: 'no_valid_agent' };
+  }
+
   async executeAutoTrade(signal) {
     if (this.activeAgents.length === 0) {
       console.log('❌ AUTO-TRADE: No active agents configured');
       return;
     }
-    
-    // Round-robin: Her sinyalde farklı agent kullan
-    const agentAlias = this.activeAgents[this.currentAgentIndex];
-    this.currentAgentIndex = (this.currentAgentIndex + 1) % this.activeAgents.length;
-    
-    const agent = getAgentByAlias(agentAlias);
-    
-    if (!agent) {
-      console.error(`❌ AUTO-TRADE: Agent not found: ${agentAlias}`);
+
+    const perpPair = `${signal.coin}/USDC`;
+    const selection = await this.selectAgentWithoutCoinPosition(signal);
+
+    if (selection.reason === 'positions_api_failed') {
+      console.error('❌ AUTO-TRADE: Tüm agentlar için pozisyon API başarısız');
+      await this.telegramBot.sendMessage(
+        `⚠️ <b>Otomatik işlem yapılamadı</b>\n\n` +
+        `Açık pozisyon bilgisi alınamadı (API). Güvenlik için emir gönderilmedi.\n` +
+        `<code>${signal.coin}</code> · ${signal.action}`
+      );
       return;
     }
-    
-    console.log(`\n🎮 AUTO-TRADE: Executing ${signal.action} ${signal.coin} with ${agent.label}...`);
-    
-    const trader = new DegenClawTrader(agent);
-    
-    // Agent'ın gerçek balance'ını kontrol et
+
+    if (selection.reason === 'all_holding' && selection.holders.length > 0) {
+      console.log(`⏭ AUTO-TRADE: Tüm aktif agentlarda ${signal.coin} pozisyonu var`);
+      await this.telegramBot.sendAutoTradeSkippedAllHolding(signal, selection.holders);
+      return;
+    }
+
+    if (!selection.agent || !selection.trader) {
+      console.error('❌ AUTO-TRADE: Uygun agent yok', selection.reason);
+      return;
+    }
+
+    const { agent, trader, alias } = selection;
+
+    console.log(`\n🎮 AUTO-TRADE: ${signal.action} ${signal.coin} → ${agent.label} (${alias})`);
+
     const balanceResult = await trader.getAccountBalance();
     if (!balanceResult.success) {
       console.error(`❌ AUTO-TRADE: Failed to get balance for ${agent.label}`);
+      await this.telegramBot.sendMessage(
+        `❌ <b>Otomatik işlem iptal</b>\n\n` +
+        `Agent: ${agent.label}\n` +
+        `Bakiye alınamadı: ${balanceResult.error || 'bilinmiyor'}`
+      );
       return;
     }
-    
+
     const availableBalance = balanceResult.balance;
     console.log(`💰 ${agent.label} balance: $${availableBalance.toFixed(2)}`);
-    
+
     const tpPercent = ((signal.take_profit[1] - signal.entry) / signal.entry) * 100;
     const slPercent = Math.abs((signal.stop_loss - signal.entry) / signal.entry) * 100;
-    
-    // Pozisyon boyutunu agent balance'ına göre hesapla
-    const size = Math.max(15, Math.min(availableBalance * 0.2, 100)); // Balance'ın %20'si, max 100 USDC
-    
+    const size = Math.max(15, Math.min(availableBalance * 0.2, 100));
+
     const result = await trader.executeWithRetry(() =>
       trader.openPosition({
-        pair: signal.coin,
+        pair: perpPair,
         side: signal.action.toLowerCase(),
-        size: size,
+        size,
         leverage: signal.leverage,
         tpPercent: Math.abs(tpPercent),
         slPercent: Math.abs(slPercent),
         currentPrice: signal.entry
       })
     );
-    
+
     if (result.success) {
       console.log(`✅ AUTO-TRADE: Position opened successfully!`);
-      await this.telegramBot.sendMessage(
-        `🎮 <b>AUTO-TRADE Executed</b>\n\n` +
-        `👤 ${agent.label}\n` +
-        `${signal.action === 'LONG' ? '🟢' : '🔴'} ${signal.action} ${signal.coin}\n` +
-        `💰 Size: $${size.toFixed(2)}\n` +
-        `⚡ Leverage: ${signal.leverage}x\n` +
-        `📊 Entry: $${signal.entry}\n` +
-        `🎯 TP: $${signal.take_profit[1]}\n` +
-        `🛑 SL: $${signal.stop_loss}`
-      );
+      await this.telegramBot.sendAutoTradeSuccess(signal, {
+        agentLabel: agent.label,
+        agentAlias: alias,
+        size,
+        perpPair
+      });
     } else {
       console.error(`❌ AUTO-TRADE: Failed - ${result.error}`);
       await this.telegramBot.sendMessage(
-        `❌ <b>AUTO-TRADE Failed</b>\n\n` +
-        `Agent: ${agent.label}\n` +
-        `Signal: ${signal.action} ${signal.coin}\n` +
-        `Error: ${result.error}`
+        `❌ <b>Otomatik işlem başarısız</b>\n\n` +
+        `👤 Agent: ${agent.label} (<code>${alias}</code>)\n` +
+        `📌 ${signal.action} ${perpPair}\n` +
+        `Hata: ${result.error}`
       );
     }
   }
