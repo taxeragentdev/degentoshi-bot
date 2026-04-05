@@ -22,7 +22,8 @@ export class Scanner {
     this.telegramMinConfidence = CONFIG.telegramMinConfidence;
     this.cooldownPath = path.join(process.cwd(), 'data', 'signal_cooldown.json');
     this.loadCooldownFromDisk();
-    
+    this.autoTradeMinConfidence = CONFIG.autoTradeMinConfidence;
+
     // Aktif trading agentları (virgülle ayrılmış)
     this.activeAgents = (process.env.ACTIVE_AGENTS || 'raichu').split(',').map(a => a.trim());
     this.currentAgentIndex = 0;
@@ -56,6 +57,7 @@ export class Scanner {
     console.log(`🎮 Auto-trade: ${this.autoTrade ? 'ENABLED' : 'DISABLED'}`);
     if (this.autoTrade) {
       console.log(`👥 Active agents: ${this.activeAgents.join(', ')}`);
+      console.log(`🎯 Auto-trade min confidence: ${this.autoTradeMinConfidence} (sinyal bunun altındaysa Degen Claw emri yok)`);
     }
     console.log(`⏱️  Signal cooldown: ${(this.signalCooldownMs / 60000).toFixed(0)} min/coin (persisted)`);
     console.log(`📡 Hyperliquid data: ${CONFIG.hyperliquidApiUrl}`);
@@ -197,10 +199,20 @@ export class Scanner {
     } else {
       console.log(`📵 Telegram atlandı (min güven: ${this.telegramMinConfidence}, sinyal: ${signal.confidence})`);
     }
-    
-    if (this.autoTrade && signal.action !== 'NO_TRADE' && signal.confidence === 'HIGH') {
-      await this.executeAutoTrade(signal);
+
+    if (this.autoTrade && signal.action !== 'NO_TRADE') {
+      if (this.signalMeetsAutoTradeMin(signal)) {
+        await this.executeAutoTrade(signal);
+      } else {
+        console.log(
+          `📵 AUTO-TRADE atlandı — sinyal ${signal.confidence}, gerekli min: ${this.autoTradeMinConfidence} (AUTO_TRADE_MIN_CONFIDENCE)`
+        );
+      }
     }
+  }
+
+  signalMeetsAutoTradeMin(signal) {
+    return this.confidenceRank(signal.confidence) >= this.confidenceRank(this.autoTradeMinConfidence);
   }
   
   async selectAgentWithoutCoinPosition(signal) {
