@@ -1,0 +1,29 @@
+{
+  "name": "crypto-signal-bot",
+  "version": "1.0.0",
+  "description": "Production-ready crypto trading signal bot for perpetual futures",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node --test",
+    "test:indicators": "node test/testIndicators.js",
+    "test:risk": "node test/testRiskManager.js",
+    "health": "node scripts/healthcheck.js",
+    "setup": "node scripts/setup.js"
+  },
+  "keywords": [
+    "crypto",
+    "trading",
+    "signals",
+    "perpetual",
+    "futures"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "ccxt": "^4.2.0",
+    "dotenv": "^16.4.5"
+  }
+}

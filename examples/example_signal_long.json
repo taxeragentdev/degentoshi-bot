@@ -1,0 +1,29 @@
+{
+  "coin": "BTC",
+  "action": "LONG",
+  "entry": 65000,
+  "stop_loss": 64000,
+  "take_profit": [
+    66000,
+    67000,
+    68000
+  ],
+  "leverage": 5,
+  "confidence": "HIGH",
+  "reason": "1H uptrend + 15M pullback + RSI valid + MACD bull cross + Volume spike + Favorable funding",
+  "timeframe": "5m/15m/1h confluence",
+  "timestamp": "2024-01-15T10:30:00.000Z",
+  "score": 7,
+  "rsi": "45.23",
+  "fundingRate": "0.0045%",
+  "analysis": {
+    "entry_explanation": "Price pulled back to 15M EMA50 support at 64200, showing bullish rejection",
+    "stop_rationale": "ATR(14) = 666, Stop set at 1.5x ATR below entry",
+    "risk_amount": "$100 (1% of $10,000 capital)",
+    "position_size": "0.1538 BTC",
+    "potential_pnl_tp1": "$153.80 (+1R)",
+    "potential_pnl_tp2": "$307.60 (+2R)",
+    "potential_pnl_tp3": "$461.40 (+3R)",
+    "max_loss": "$153.80 (-1R)"
+  }
+}

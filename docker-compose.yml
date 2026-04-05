@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  signal-bot:
+    build: .
+    container_name: crypto-signal-bot
+    restart: always
+    volumes:
+      - ./signals:/app/signals
+      - ./logs:/app/logs
+      - ./data:/app/data
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

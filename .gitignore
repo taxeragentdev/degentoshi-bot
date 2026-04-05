@@ -1,0 +1,21 @@
+node_modules/
+.env
+*.log
+.DS_Store
+signals/
+data/
+logs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Temp
+*.tmp
+temp/

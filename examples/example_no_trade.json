@@ -1,0 +1,18 @@
+{
+  "action": "NO_TRADE",
+  "reason": "Conditions not met",
+  "timestamp": "2024-01-15T15:30:00.000Z",
+  "details": {
+    "coin": "SOL",
+    "analysis": {
+      "trend_1h": "NEUTRAL - Price near EMA200",
+      "setup_15m": "NO SETUP - RSI at 50, no clear direction",
+      "entry_5m": "NO TRIGGER",
+      "volume": "0.85x average - Low conviction",
+      "funding": "0.0122% - Slightly high for longs",
+      "score": 2,
+      "confidence": "LOW"
+    },
+    "rejection_reason": "Score below minimum threshold (4), sideways market"
+  }
+}
