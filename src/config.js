@@ -49,16 +49,16 @@ export const CONFIG = {
       highNegative: -0.01
     },
     rsi: {
-      longMin: 40,
-      longMax: 55,
-      shortMin: 55,
-      shortMax: 70
+      longMin: 35,      // 40'tan 35'e düşürdük (daha geniş aralık)
+      longMax: 60,      // 55'ten 60'a çıkardık
+      shortMin: 50,     // 55'ten 50'ye düşürdük
+      shortMax: 75      // 70'ten 75'e çıkardık
     },
     confidence: {
-      high: 6,
-      medium: 4
+      high: 5,          // 6'dan 5'e düşürdük (daha kolay HIGH)
+      medium: 3         // 4'ten 3'e düşürdük (daha kolay MEDIUM)
     },
-    volumeSpike: 1.5,
-    oiChangeMin: 0.05
+    volumeSpike: 1.3,   // 1.5'ten 1.3'e (daha hassas)
+    oiChangeMin: 0.03   // 0.05'ten 0.03'e (daha hassas)
   }
 };
