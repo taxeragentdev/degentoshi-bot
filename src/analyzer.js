@@ -168,21 +168,41 @@ export class MarketAnalyzer {
   
   calculateStopLoss(action, analysis) {
     const { currentPrice, atr5m, candles5m } = analysis;
-    
-    const atrStop = action === 'LONG' 
-      ? currentPrice - (atr5m * CONFIG.indicators.atrMultiplier)
-      : currentPrice + (atr5m * CONFIG.indicators.atrMultiplier);
-    
+    const minPct = CONFIG.risk.minStopDistancePct;
+    const maxPct = CONFIG.risk.maxStopDistancePct;
+    const entry = currentPrice;
+
+    const atrStop =
+      action === 'LONG'
+        ? entry - atr5m * CONFIG.indicators.atrMultiplier
+        : entry + atr5m * CONFIG.indicators.atrMultiplier;
+
     const recentCandles = candles5m.slice(-10);
-    const swingStop = action === 'LONG'
-      ? Math.min(...recentCandles.map(c => c.low))
-      : Math.max(...recentCandles.map(c => c.high));
-    
+    const swingStop =
+      action === 'LONG'
+        ? Math.min(...recentCandles.map((c) => c.low))
+        : Math.max(...recentCandles.map((c) => c.high));
+
+    let rawSl;
     if (action === 'LONG') {
-      return Math.max(atrStop, swingStop);
+      rawSl = Math.max(atrStop, swingStop);
     } else {
-      return Math.min(atrStop, swingStop);
+      rawSl = Math.min(atrStop, swingStop);
     }
+
+    if (action === 'LONG') {
+      const minSl = entry * (1 - minPct);
+      const maxSl = entry * (1 - maxPct);
+      let sl = Math.min(rawSl, minSl);
+      sl = Math.max(sl, maxSl);
+      return sl;
+    }
+
+    const minSl = entry * (1 + minPct);
+    const maxSl = entry * (1 + maxPct);
+    let sl = Math.max(rawSl, minSl);
+    sl = Math.min(sl, maxSl);
+    return sl;
   }
   
   calculateTakeProfits(action, entry, stopLoss) {

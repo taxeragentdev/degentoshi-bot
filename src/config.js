@@ -56,7 +56,18 @@ export const CONFIG = {
     minRiskReward: 2,
     tp1Multiplier: 1,
     tp2Multiplier: 2,
-    tp3Multiplier: 3
+    tp3Multiplier: 3,
+    /**
+     * SL ile entry arası minimum mesafe (fiyatın yüzdesi).
+     * SUI gibi coinlerde 5m ATR çok küçük kalınca SL/TP gürültüde tetiklenmesin diye zorunlu.
+     */
+    minStopDistancePct:
+      parseFloat(process.env.MIN_STOP_DISTANCE_PCT) ||
+      parseFloat(process.env.MIN_STOP_PCT) ||
+      0.008,
+    /** SL ile entry arası maksimum mesafe (aşırı geniş SL sınırı, varsayılan %8) */
+    maxStopDistancePct:
+      parseFloat(process.env.MAX_STOP_DISTANCE_PCT) || 0.08
   },
   
   leverage: {
