@@ -9,11 +9,31 @@ function acpBaseUrl() {
   return raw.replace(/\/$/, '');
 }
 
-/** "BTC" veya "BTC/USDC" → "BTC/USDC" */
-export function normalizePerpPair(pairOrCoin) {
-  const p = String(pairOrCoin).toUpperCase().trim();
-  if (p.includes('/')) return p;
-  return `${p}/USDC`;
+/**
+ * Degen Claw ACP: pair alanında yalnızca baz sembol (BTC, HYPE) — ikinci foto ile aynı.
+ * Kabul: HYPE/USDC, BTC-USDC, BTC/USDC:USDC → HYPE, BTC
+ */
+export function pairForAcp(pairOrCoin) {
+  let p = String(pairOrCoin).toUpperCase().trim();
+  if (!p) return '';
+
+  if (p.includes('/') || p.includes(':')) {
+    p = p.split('/')[0].split(':')[0];
+  }
+
+  const hi = p.indexOf('-');
+  if (hi > 0) {
+    const suf = p.slice(hi + 1);
+    if (suf === 'USDC' || suf === 'USD' || suf === 'PERP' || suf === 'USDT') {
+      p = p.slice(0, hi);
+    }
+  }
+
+  if (p.endsWith('USDC') && p.length > 4 && !p.includes('/')) {
+    p = p.slice(0, -4);
+  }
+
+  return p.split('/')[0].split(':')[0];
 }
 
 export class DegenClawTrader {
@@ -39,11 +59,16 @@ export class DegenClawTrader {
    * Eski agdp.io Bearer + /job formatı değil.
    */
   async postAcpJob(jobOfferingName, serviceRequirements) {
+    const req = { ...serviceRequirements };
+    if (typeof req.pair === 'string' && req.pair.length > 0) {
+      req.pair = pairForAcp(req.pair);
+    }
+
     const url = `${this.acpBase}/acp/jobs`;
     const body = {
       providerWalletAddress: DEGEN_CLAW_PROVIDER,
       jobOfferingName,
-      serviceRequirements
+      serviceRequirements: req
     };
 
     const response = await fetchWithTimeout(url, {
@@ -154,7 +179,7 @@ export class DegenClawTrader {
   }
 
   async openPosition({ pair, side, size, leverage = 3, tpPercent, slPercent, currentPrice }) {
-    const pairU = normalizePerpPair(pair);
+    const pairU = pairForAcp(pair);
     const sideLc = String(side).toLowerCase();
 
     let takeProfit;
@@ -197,7 +222,7 @@ export class DegenClawTrader {
   }
 
   async closePosition(pairOrCoin, _side) {
-    const pairU = normalizePerpPair(pairOrCoin);
+    const pairU = pairForAcp(pairOrCoin);
     console.log(`[${this.agent.label}] Closing ${pairU}...`);
 
     try {
@@ -225,7 +250,7 @@ export class DegenClawTrader {
   }
 
   async modifyPosition({ pair, side: _side, leverage, takeProfit, stopLoss }) {
-    const pairU = normalizePerpPair(pair);
+    const pairU = pairForAcp(pair);
     const req = { pair: pairU };
     if (leverage != null && Number.isFinite(Number(leverage))) req.leverage = Math.floor(Number(leverage));
     if (takeProfit) req.takeProfit = takeProfit;
