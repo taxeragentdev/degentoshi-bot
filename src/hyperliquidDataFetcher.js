@@ -132,6 +132,21 @@ export class HyperliquidDataFetcher {
   async fetchTicker(symbol) {
     try {
       const coin = symbol.split('/')[0];
+      
+      // İlk önce en son 5m candle'ı al (en güncel fiyat)
+      const recentCandles = await this.fetchOHLCV(symbol, '5m', 2);
+      
+      if (recentCandles && recentCandles.length > 0) {
+        // En son tamamlanmış candle'ın close fiyatını kullan
+        const lastCandle = recentCandles[recentCandles.length - 1];
+        return {
+          last: lastCandle.close,
+          volume: lastCandle.volume,
+          timestamp: lastCandle.timestamp
+        };
+      }
+      
+      // Fallback: allMids kullan
       const mids = await this.fetchAllMids();
       
       if (!mids || typeof mids !== 'object') {
@@ -146,7 +161,7 @@ export class HyperliquidDataFetcher {
 
       return {
         last: parseFloat(price),
-        volume: 0, // Will be calculated from candles
+        volume: 0,
         timestamp: Date.now()
       };
     } catch (error) {

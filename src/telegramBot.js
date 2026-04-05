@@ -239,15 +239,50 @@ Hoş geldin! Bu bot otomatik olarak yüksek kaliteli kripto trading sinyalleri �
     
     const trader = new DegenClawTrader(agent);
     
-    // Hyperliquid fiyatını al (Hyperliquid API'den)
+    // Hyperliquid fiyatını al (OHLCV candle close - daha güvenilir)
     const coinSymbol = coin.replace('/USDC', '');
-    const priceResponse = await fetch('https://api.hyperliquid-testnet.xyz/info', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'allMids' })
-    });
-    const priceData = await priceResponse.json();
-    const currentPrice = parseFloat(priceData[coinSymbol] || 0);
+    
+    // İlk önce candle'lardan al
+    let currentPrice = 0;
+    try {
+      const candleResponse = await fetch('https://api.hyperliquid-testnet.xyz/info', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'candleSnapshot',
+          req: {
+            coin: coinSymbol,
+            interval: '5m',
+            startTime: Date.now() - (2 * 5 * 60 * 1000), // Son 2 candle
+            endTime: Date.now()
+          }
+        })
+      });
+      const candleData = await candleResponse.json();
+      
+      if (candleData && candleData.length > 0) {
+        // En son candle'ın close fiyatı
+        const lastCandle = candleData[candleData.length - 1];
+        currentPrice = parseFloat(lastCandle.c);
+      }
+    } catch (err) {
+      console.error('Candle price error:', err);
+    }
+    
+    // Fallback: allMids
+    if (!currentPrice || currentPrice <= 0) {
+      try {
+        const priceResponse = await fetch('https://api.hyperliquid-testnet.xyz/info', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'allMids' })
+        });
+        const priceData = await priceResponse.json();
+        currentPrice = parseFloat(priceData[coinSymbol] || 0);
+      } catch (err) {
+        console.error('AllMids price error:', err);
+      }
+    }
     
     if (!currentPrice) {
       await this.sendMessage(`❌ ${coin} fiyatı alınamadı (Hyperliquid)`);
