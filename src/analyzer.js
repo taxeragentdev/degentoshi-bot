@@ -223,10 +223,15 @@ export class MarketAnalyzer {
     }
   }
   
-  calculateLeverage(confidence) {
-    if (confidence === 'HIGH') return CONFIG.leverage.high;
-    if (confidence === 'MEDIUM') return CONFIG.leverage.medium;
-    return CONFIG.leverage.low;
+  calculateLeverage(confidence, score = 0) {
+    const L = CONFIG.leverage;
+    const s = Number(score) || 0;
+    if (confidence === 'HIGH') {
+      if (s >= L.veryHighMinScore) return L.veryHigh;
+      return L.high;
+    }
+    if (confidence === 'MEDIUM') return L.medium;
+    return L.low;
   }
   
   getConfidence(score) {

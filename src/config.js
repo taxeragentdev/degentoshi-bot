@@ -1,6 +1,13 @@
 /** Hyperliquid mainnet = gerçek piyasa fiyatları; testnet fiyatları piyasadan sapar. */
 const DEFAULT_HL_API = 'https://api.hyperliquid.xyz';
 
+function envPositiveInt(name, defaultValue) {
+  const raw = process.env[name];
+  if (raw == null || String(raw).trim() === '') return defaultValue;
+  const n = parseInt(String(raw).trim(), 10);
+  return Number.isFinite(n) && n > 0 ? n : defaultValue;
+}
+
 export const CONFIG = {
   exchange: 'hyperliquid',
   /** Market data kaynağı: varsayılan mainnet (CoinGlass / HL UI ile uyumlu fiyatlar) */
@@ -86,10 +93,20 @@ export const CONFIG = {
       parseFloat(process.env.MAX_STOP_DISTANCE_PCT) || 0.08
   },
   
+  /**
+   * Sinyal kaldıracı: güven (MEDIUM/HIGH) + koşul skoru.
+   * HIGH ve skor ≥ veryHighMinScore → veryHigh (ör. çok faktörlü setup).
+   * Çok agresif istemiyorsan LEVERAGE_VERY_HIGH_MIN_SCORE=99 yap (pratikte sadece high/medium kullanılır).
+   */
   leverage: {
-    high: 5,
-    medium: 3,
-    low: 1
+    low: envPositiveInt('LEVERAGE_LOW', 1),
+    medium: envPositiveInt('LEVERAGE_MEDIUM', 3),
+    high: envPositiveInt('LEVERAGE_HIGH', 5),
+    veryHigh: envPositiveInt('LEVERAGE_VERY_HIGH', 10),
+    veryHighMinScore: (() => {
+      const raw = parseInt(process.env.LEVERAGE_VERY_HIGH_MIN_SCORE, 10);
+      return Number.isFinite(raw) && raw > 0 ? raw : 7;
+    })()
   },
   
   thresholds: {

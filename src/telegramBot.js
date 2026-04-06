@@ -314,6 +314,10 @@ Hoş geldin! Bot sürekli tarama yapar; Telegram’a sinyal gönderir. <b>Otomat
     msg += `\n💵 <b>Emir tutarı (USDC):</b> min <code>${CONFIG.autoTradeMinNotionalUsd}</code> · bakiyenin <code>${(CONFIG.autoTradeBalanceFraction * 100).toFixed(0)}%</code> · üst sınır <code>${CONFIG.autoTradeMaxPositionUsd}</code>\n`;
     msg += `<i>Env: AUTO_TRADE_MIN_NOTIONAL_USD, AUTO_TRADE_BALANCE_FRACTION (0–1), AUTO_TRADE_MAX_POSITION_USD</i>\n`;
 
+    const lev = CONFIG.leverage;
+    msg += `\n⚡ <b>Kaldıraç (sinyal):</b> MEDIUM <code>${lev.medium}x</code> · HIGH <code>${lev.high}x</code> · skor ≥ <code>${lev.veryHighMinScore}</code> → <code>${lev.veryHigh}x</code>\n`;
+    msg += `<i>Env: LEVERAGE_LOW/MEDIUM/HIGH, LEVERAGE_VERY_HIGH, LEVERAGE_VERY_HIGH_MIN_SCORE</i>\n`;
+
     msg += `\n📊 <b>Telegram eşik:</b> <code>${telMin}</code>\n`;
     msg += `📊 <b>Otomatik emir eşik:</b> <code>${tradeMin}</code>`;
     if (!explicitAuto) {

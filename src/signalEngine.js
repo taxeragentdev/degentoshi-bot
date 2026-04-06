@@ -49,10 +49,10 @@ export class SignalEngine {
     const entry = analysis.currentPrice;
     const stopLoss = this.analyzer.calculateStopLoss('LONG', analysis);
     const takeProfits = this.analyzer.calculateTakeProfits('LONG', entry, stopLoss);
-    const leverage = this.analyzer.calculateLeverage(confidence);
-    
+    const leverage = this.analyzer.calculateLeverage(confidence, conditions.score);
+
     const coinSymbol = marketData.symbol.split('/')[0];
-    
+
     return {
       coin: coinSymbol,
       action: 'LONG',
@@ -74,10 +74,10 @@ export class SignalEngine {
     const entry = analysis.currentPrice;
     const stopLoss = this.analyzer.calculateStopLoss('SHORT', analysis);
     const takeProfits = this.analyzer.calculateTakeProfits('SHORT', entry, stopLoss);
-    const leverage = this.analyzer.calculateLeverage(confidence);
-    
+    const leverage = this.analyzer.calculateLeverage(confidence, conditions.score);
+
     const coinSymbol = marketData.symbol.split('/')[0];
-    
+
     return {
       coin: coinSymbol,
       action: 'SHORT',
