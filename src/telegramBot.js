@@ -6,6 +6,13 @@ const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 const TELEGRAM_API = TELEGRAM_BOT_TOKEN ? `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}` : '';
 
+/** Scanner ile aynı: ACTIVE_AGENTS yok → raichu; boş string → [] */
+function activeAgentsFromEnv() {
+  const raw = process.env.ACTIVE_AGENTS;
+  if (raw === undefined) return ['raichu'];
+  return raw.split(',').map((a) => a.trim()).filter(Boolean);
+}
+
 export class TelegramBot {
   constructor() {
     this.botToken = TELEGRAM_BOT_TOKEN;
@@ -232,6 +239,8 @@ Hoş geldin! Bot sürekli tarama yapar; Telegram’a sinyal gönderir. <b>Otomat
 ✅ Sinyal bildirimleri
 
 <b>Komutlar:</b> /help · <b>Otomatik işlem durumu:</b> /autotrade
+
+<i>Otomatik işlemi tamamen durdurmak: sunucuda</i> <code>AUTO_TRADE=false</code> <i>veya</i> <code>ACTIVE_AGENTS=</code> <i>(boş liste).</i>
 `;
 
     await this.sendMessage(message);
@@ -245,6 +254,8 @@ Hoş geldin! Bot sürekli tarama yapar; Telegram’a sinyal gönderir. <b>Otomat
 /start - Botu başlat
 /help - Yardım menüsü
 /autotrade veya /status - Otomatik işlem açık mı, hangi agentlar
+
+<b>Otomatik işlemi durdur (tüm agentlar):</b> Railway’de <code>AUTO_TRADE=false</code> veya <code>ACTIVE_AGENTS=</code> (boş), redeploy. Açık pozisyonları kapatmak için borsada veya <code>/close</code> ile tek tek.
 
 <b>Agent Yönetimi:</b>
 /agents - 12 agent listesi
@@ -281,8 +292,7 @@ Hoş geldin! Bot sürekli tarama yapar; Telegram’a sinyal gönderir. <b>Otomat
    */
   async handleAutoTradeStatus(chatId) {
     const autoOn = process.env.AUTO_TRADE === 'true';
-    const agentsStr = process.env.ACTIVE_AGENTS || 'raichu';
-    const aliases = agentsStr.split(',').map((a) => a.trim()).filter(Boolean);
+    const aliases = activeAgentsFromEnv();
 
     let msg = '🎮 <b>Otomatik işlem (Degen Claw)</b>\n\n';
 
@@ -302,12 +312,16 @@ Hoş geldin! Bot sürekli tarama yapar; Telegram’a sinyal gönderir. <b>Otomat
     }
 
     msg += '<b>ACTIVE_AGENTS</b> (sıra ile):\n';
-    for (const alias of aliases) {
-      const agent = getAgentByAlias(alias);
-      if (agent) {
-        msg += `• ${agent.label} (<code>${alias}</code>)\n`;
-      } else {
-        msg += `• <code>${alias}</code> (tanımsız alias)\n`;
+    if (aliases.length === 0) {
+      msg += '<i>Liste boş — otomatik emir için agent yok (env’de ACTIVE_AGENTS boş).</i>\n';
+    } else {
+      for (const alias of aliases) {
+        const agent = getAgentByAlias(alias);
+        if (agent) {
+          msg += `• ${agent.label} (<code>${alias}</code>)\n`;
+        } else {
+          msg += `• <code>${alias}</code> (tanımsız alias)\n`;
+        }
       }
     }
 
@@ -650,12 +664,14 @@ Hoş geldin! Bot sürekli tarama yapar; Telegram’a sinyal gönderir. <b>Otomat
   }
 
   async handleShowActiveAgents(chatId) {
-    // Railway environment variable'dan oku
-    const activeAgentsStr = process.env.ACTIVE_AGENTS || 'raichu';
-    const activeAliases = activeAgentsStr.split(',').map(a => a.trim());
-    
+    const activeAliases = activeAgentsFromEnv();
+
     let msg = '👥 <b>Aktif Trading Agentlar</b>\n\n';
-    
+
+    if (activeAliases.length === 0) {
+      msg += '<i>Liste boş — otomatik sinyal emri için hiç agent seçili değil.</i>\n\n';
+    }
+
     for (const alias of activeAliases) {
       const agent = getAgentByAlias(alias);
       if (agent) {

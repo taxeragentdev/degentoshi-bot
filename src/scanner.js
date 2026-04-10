@@ -24,8 +24,13 @@ export class Scanner {
     this.loadCooldownFromDisk();
     this.autoTradeMinConfidence = CONFIG.autoTradeMinConfidence;
 
-    // Aktif trading agentları (virgülle ayrılmış)
-    this.activeAgents = (process.env.ACTIVE_AGENTS || 'raichu').split(',').map(a => a.trim());
+    // Aktif trading agentları (virgülle ayrılmış). ACTIVE_AGENTS tanımsız → varsayılan raichu;
+    // boş string veya sadece virgül → otomatik işlemde hiç agent yok (AUTO_TRADE açık olsa bile).
+    const rawAgents = process.env.ACTIVE_AGENTS;
+    this.activeAgents =
+      rawAgents === undefined
+        ? ['raichu']
+        : rawAgents.split(',').map((a) => a.trim()).filter(Boolean);
   }
   
   async start() {
