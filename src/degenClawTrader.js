@@ -1,5 +1,9 @@
 import { fetchWithTimeout, logFetchError } from './httpFetch.js';
 import { DEGEN_CLAW_PROVIDER, DEFAULT_ACP_BASE_URL } from './degenConstants.js';
+import { pairForAcp, baseCoinFromPair } from './perpSymbols.js';
+import { getHlDirectCredentials, HyperliquidDirectSession } from './hyperliquidDirect.js';
+
+export { pairForAcp, baseCoinFromPair } from './perpSymbols.js';
 
 const POSITIONS_API =
   process.env.DEGEN_CLAW_USERS_API_URL || 'https://dgclaw-app-production.up.railway.app/users';
@@ -10,38 +14,20 @@ function acpBaseUrl() {
 }
 
 /**
- * Degen Claw ACP: pair alanında yalnızca baz sembol (BTC, HYPE) — ikinci foto ile aynı.
- * Kabul: HYPE/USDC, BTC-USDC, BTC/USDC:USDC → HYPE, BTC
+ * Degen Claw ACP: pair alanında yalnızca baz sembol (BTC, HYPE) veya HIP-3 (xyz:COIN).
  */
-export function pairForAcp(pairOrCoin) {
-  let p = String(pairOrCoin).toUpperCase().trim();
-  if (!p) return '';
-
-  if (p.includes('/') || p.includes(':')) {
-    p = p.split('/')[0].split(':')[0];
-  }
-
-  const hi = p.indexOf('-');
-  if (hi > 0) {
-    const suf = p.slice(hi + 1);
-    if (suf === 'USDC' || suf === 'USD' || suf === 'PERP' || suf === 'USDT') {
-      p = p.slice(0, hi);
-    }
-  }
-
-  if (p.endsWith('USDC') && p.length > 4 && !p.includes('/')) {
-    p = p.slice(0, -4);
-  }
-
-  return p.split('/')[0].split(':')[0];
-}
-
 export class DegenClawTrader {
   constructor(agent) {
     this.agent = agent;
     this.apiKey = agent.apiKey;
     this.walletAddress = agent.walletAddress;
     this.acpBase = acpBaseUrl();
+    const hl = getHlDirectCredentials(agent);
+    this._hlDirect = hl ? new HyperliquidDirectSession({ ...hl, label: agent.label }) : null;
+  }
+
+  usesDirectHyperliquid() {
+    return this._hlDirect != null;
   }
 
   buildAcpHeaders() {
@@ -56,7 +42,6 @@ export class DegenClawTrader {
 
   /**
    * Virtuals ACP: POST /acp/jobs
-   * Eski agdp.io Bearer + /job formatı değil.
    */
   async postAcpJob(jobOfferingName, serviceRequirements) {
     const req = { ...serviceRequirements };
@@ -111,6 +96,9 @@ export class DegenClawTrader {
   }
 
   async getAccountBalance() {
+    if (this._hlDirect) {
+      return this._hlDirect.getAccountBalance();
+    }
     try {
       const response = await fetchWithTimeout(`${POSITIONS_API}/${this.walletAddress}/account`, {
         timeoutMs: 20_000
@@ -132,6 +120,9 @@ export class DegenClawTrader {
   }
 
   async getPositions() {
+    if (this._hlDirect) {
+      return this._hlDirect.getPositions();
+    }
     try {
       const response = await fetchWithTimeout(`${POSITIONS_API}/${this.walletAddress}/positions`, {
         timeoutMs: 20_000
@@ -178,7 +169,20 @@ export class DegenClawTrader {
     };
   }
 
-  async openPosition({ pair, side, size, leverage = 3, tpPercent, slPercent, currentPrice }) {
+  /**
+   * @param {{ pair: string, side: string, size: number, leverage?: number, tpPercent?: number, slPercent?: number, currentPrice?: number, orderType?: 'market'|'limit', limitPrice?: string|number }} opts
+   */
+  async openPosition({
+    pair,
+    side,
+    size,
+    leverage = 3,
+    tpPercent,
+    slPercent,
+    currentPrice,
+    orderType = 'market',
+    limitPrice
+  }) {
     const pairU = pairForAcp(pair);
     const sideLc = String(side).toLowerCase();
 
@@ -190,6 +194,30 @@ export class DegenClawTrader {
       stopLoss = calc.stopLoss;
     }
 
+    const mode = this._hlDirect ? 'Hyperliquid (direkt)' : `ACP ${this.acpBase}`;
+    console.log(
+      `[${this.agent.label}] Opening ${sideLc.toUpperCase()} ${pairU} | $${size} @ ${Math.floor(Number(leverage)) || 3}x | TP: ${takeProfit} | SL: ${stopLoss} | ${mode}`
+    );
+
+    if (this._hlDirect) {
+      try {
+        return await this._hlDirect.openPosition({
+          pair,
+          side: sideLc,
+          size,
+          leverage,
+          takeProfit,
+          stopLoss,
+          currentPrice,
+          orderType,
+          limitPrice
+        });
+      } catch (error) {
+        logFetchError(`[${this.agent.label}] openPosition HL`, error);
+        return { success: false, error: error.message };
+      }
+    }
+
     const serviceRequirements = {
       action: 'open',
       pair: pairU,
@@ -199,10 +227,10 @@ export class DegenClawTrader {
     };
     if (takeProfit) serviceRequirements.takeProfit = takeProfit;
     if (stopLoss) serviceRequirements.stopLoss = stopLoss;
-
-    console.log(
-      `[${this.agent.label}] Opening ${sideLc.toUpperCase()} ${pairU} | $${size} @ ${serviceRequirements.leverage}x | TP: ${takeProfit} | SL: ${stopLoss} | ACP ${this.acpBase}`
-    );
+    if (orderType === 'limit' && limitPrice != null) {
+      serviceRequirements.orderType = 'limit';
+      serviceRequirements.limitPrice = String(limitPrice);
+    }
 
     try {
       const result = await this.postAcpJob('perp_trade', serviceRequirements);
@@ -225,6 +253,19 @@ export class DegenClawTrader {
     const pairU = pairForAcp(pairOrCoin);
     console.log(`[${this.agent.label}] Closing ${pairU}...`);
 
+    if (this._hlDirect) {
+      try {
+        const result = await this._hlDirect.closePosition(pairOrCoin);
+        if (result.success) {
+          console.log(`[${this.agent.label}] ✅ HL close ok`);
+        }
+        return result;
+      } catch (error) {
+        logFetchError(`[${this.agent.label}] closePosition HL`, error);
+        return { success: false, error: error.message };
+      }
+    }
+
     try {
       const result = await this.postAcpJob('perp_trade', {
         action: 'close',
@@ -245,8 +286,7 @@ export class DegenClawTrader {
   }
 
   static baseCoinFromPair(pair) {
-    if (!pair) return '';
-    return String(pair).toUpperCase().split('/')[0].split(':')[0];
+    return baseCoinFromPair(pair);
   }
 
   async modifyPosition({ pair, side: _side, leverage, takeProfit, stopLoss }) {
@@ -257,6 +297,20 @@ export class DegenClawTrader {
     if (stopLoss) req.stopLoss = stopLoss;
 
     console.log(`[${this.agent.label}] Modifying ${pairU}...`);
+
+    if (this._hlDirect) {
+      try {
+        return await this._hlDirect.modifyPosition({
+          pair,
+          leverage,
+          takeProfit,
+          stopLoss
+        });
+      } catch (error) {
+        logFetchError(`[${this.agent.label}] modifyPosition HL`, error);
+        return { success: false, error: error.message };
+      }
+    }
 
     try {
       const result = await this.postAcpJob('perp_modify', req);

@@ -4,6 +4,7 @@ import { CONFIG } from './config.js';
 import { TelegramBot } from './telegramBot.js';
 import { getAgentByAlias } from './degenClawAgents.js';
 import { DegenClawTrader } from './degenClawTrader.js';
+import { baseCoinFromPair } from './perpSymbols.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -45,11 +46,13 @@ export class Scanner {
     
     const allAgents = getAllAgents();
     let totalBalance = 0;
-    for (const agent of allAgents.slice(0, 3)) { // İlk 3 agent'ı göster
+    for (const agent of allAgents.slice(0, 3)) {
+      // İlk 3 agent'ı göster
       const trader = new DegenClawTrader(agent);
       const balanceResult = await trader.getAccountBalance();
+      const mode = trader.usesDirectHyperliquid() ? 'HL-direkt' : 'ACP';
       if (balanceResult.success) {
-        console.log(`   ${agent.alias}: $${balanceResult.balance.toFixed(2)}`);
+        console.log(`   ${agent.alias}: $${balanceResult.balance.toFixed(2)} (${mode})`);
         totalBalance += balanceResult.balance;
       }
     }
@@ -242,12 +245,12 @@ export class Scanner {
       }
 
       const hasCoin = posResult.positions.some(
-        (p) => DegenClawTrader.baseCoinFromPair(p.pair) === coinBase
+        (p) => baseCoinFromPair(p.pair) === coinBase
       );
 
       if (hasCoin) {
         const pos = posResult.positions.find(
-          (p) => DegenClawTrader.baseCoinFromPair(p.pair) === coinBase
+          (p) => baseCoinFromPair(p.pair) === coinBase
         );
         holders.push({
           label: agent.label,

@@ -23,7 +23,9 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@nktkas/hyperliquid": "^0.32.2",
     "ccxt": "^4.2.0",
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "viem": "^2.48.0"
   }
 }

@@ -1,6 +1,8 @@
 /**
- * Degen Claw / Virtuals ACP — super-saiyan-raichu ile aynı sabitler.
- * @see https://degen.virtuals.io/ — işlemler Hyperliquid perp üzerinden ACP job ile gider.
+ * Degen Claw / Virtuals ACP — sağlayıcı cüzdan (join / eski perp job yolu).
+ * v2: gerçek emirler dgclaw-skill gibi doğrudan Hyperliquid API cüzdanıyla da yapılabilir
+ * (agent başına HL_{ALIAS}_API_WALLET_KEY + HL_{ALIAS}_MASTER_ADDRESS). Ayrıntı: docs/DEGEN_CLAW_V2.md
+ * @see https://degen.virtuals.io/
  */
 
 /** Degen Claw sağlayıcı cüzdanı (job gövdesinde zorunlu) */

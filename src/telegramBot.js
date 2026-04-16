@@ -1,6 +1,7 @@
 import { AGENTS, getAgentByAlias, getAllAgents } from './degenClawAgents.js';
 import { DegenClawTrader } from './degenClawTrader.js';
 import { CONFIG } from './config.js';
+import { pairForAcp } from './perpSymbols.js';
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
@@ -265,8 +266,9 @@ Hoş geldin! Bot sürekli tarama yapar; Telegram’a sinyal gönderir. <b>Otomat
 /setactive [agent1,agent2,...] - Aktif agentları ayarla
 
 <b>Trading:</b>
-/open [agent] [coin] [long/short] [size] [leverage]x tp=[%] sl=[%]
+/open [agent] [coin] [long/short] [size] [leverage]x tp=[%] sl=[%] [limit=fiyat]
 Örnek: /open raichu BTC long 15 5x tp=3.5 sl=2
+Limit: /open raichu BTC long 50 3x limit=98000 tp=2 sl=1.5
 
 /close [agent] [coin] [long/short]
 Örnek: /close raichu BTC long
@@ -312,6 +314,9 @@ Hoş geldin! Bot sürekli tarama yapar; Telegram’a sinyal gönderir. <b>Otomat
     }
 
     msg += '<b>ACTIVE_AGENTS</b> (sıra ile):\n';
+    msg +=
+      '\n<i>v2 Hyperliquid:</i> örn. <code>HL_RAICHU_API_WALLET_KEY</code> + <code>HL_RAICHU_MASTER_ADDRESS</code> (alias büyük harf) tanımlıysa emirler doğrudan HL; yoksa ACP <code>perp_trade</code>. Repo: github.com/Virtual-Protocol/dgclaw-skill — docs/DEGEN_CLAW_V2.md\n';
+
     if (aliases.length === 0) {
       msg += '<i>Liste boş — otomatik emir için agent yok (env’de ACTIVE_AGENTS boş).</i>\n';
     } else {
@@ -357,7 +362,9 @@ Hoş geldin! Bot sürekli tarama yapar; Telegram’a sinyal gönderir. <b>Otomat
   async handleOpenPosition(parts, chatId) {
     // /open raichu BTC long 15 5x tp=3.5 sl=2
     if (parts.length < 5) {
-      await this.sendMessage('❌ Format: /open [agent] [coin] [long/short] [size] [leverage]x tp=[%] sl=[%]');
+      await this.sendMessage(
+        '❌ Format: /open [agent] [coin] [long/short] [size] [leverage]x tp=[%] sl=[%] [opsiyonel: limit=fiyat]'
+      );
       return;
     }
 
@@ -375,6 +382,10 @@ Hoş geldin! Bot sürekli tarama yapar; Telegram’a sinyal gönderir. <b>Otomat
     const tpPercent = tpMatch ? parseFloat(tpMatch[1]) : null;
     const slPercent = slMatch ? parseFloat(slMatch[1]) : null;
 
+    const limitMatch = parts.find((p) => /^limit=/i.test(p))?.match(/^limit=(\d+\.?\d*)$/i);
+    const limitPrice = limitMatch ? parseFloat(limitMatch[1]) : null;
+    const orderType = limitPrice != null && Number.isFinite(limitPrice) ? 'limit' : 'market';
+
     const agent = getAgentByAlias(agentAlias);
     if (!agent) {
       await this.sendMessage(`❌ Agent bulunamadı: ${agentAlias}\n\n/agents ile listeyi görebilirsin.`);
@@ -390,7 +401,7 @@ Hoş geldin! Bot sürekli tarama yapar; Telegram’a sinyal gönderir. <b>Otomat
     
     const trader = new DegenClawTrader(agent);
     
-    const coinSymbol = coin.replace('/USDC', '').replace(/^.*\//, '');
+    const coinSymbol = pairForAcp(coin);
     const hlInfo = `${CONFIG.hyperliquidApiUrl}/info`;
     let currentPrice = 0;
 
@@ -440,7 +451,15 @@ Hoş geldin! Bot sürekli tarama yapar; Telegram’a sinyal gönderir. <b>Otomat
       return;
     }
 
-    const result = await trader.executeWithRetry(() => 
+    if (orderType === 'limit' && (!Number.isFinite(limitPrice) || limitPrice <= 0)) {
+      await this.sendMessage('❌ Limit emir için geçerli bir <code>limit=fiyat</code> yaz (örn. limit=98000)');
+      return;
+    }
+
+    const refPrice =
+      orderType === 'limit' && Number.isFinite(limitPrice) && limitPrice > 0 ? limitPrice : currentPrice;
+
+    const result = await trader.executeWithRetry(() =>
       trader.openPosition({
         pair: coin,
         side,
@@ -448,20 +467,30 @@ Hoş geldin! Bot sürekli tarama yapar; Telegram’a sinyal gönderir. <b>Otomat
         leverage,
         tpPercent,
         slPercent,
-        currentPrice
+        currentPrice: refPrice,
+        orderType,
+        limitPrice: orderType === 'limit' ? limitPrice : undefined
       })
     );
 
     if (result.success) {
-      const tpsl = trader.calculateTPSL(currentPrice, tpPercent, slPercent, side);
+      const tpsl =
+        tpPercent != null && slPercent != null
+          ? trader.calculateTPSL(refPrice, tpPercent, slPercent, side)
+          : null;
       let msg = `✅ <b>Pozisyon Açıldı</b>\n\n`;
       msg += `👤 Agent: ${agent.label}\n`;
       msg += `${side === 'long' ? '🟢' : '🔴'} ${side.toUpperCase()} ${coin}\n`;
       msg += `💰 Size: $${size}\n`;
       msg += `⚡ Leverage: ${leverage}x\n`;
-      msg += `📊 Entry: $${currentPrice.toFixed(2)}\n`;
-      msg += `🎯 TP: $${tpsl.takeProfit}\n`;
-      msg += `🛑 SL: $${tpsl.stopLoss}\n`;
+      msg +=
+        orderType === 'limit'
+          ? `📌 Limit fiyat: $${limitPrice}\n`
+          : `📊 Referans fiyat: $${currentPrice.toFixed(2)}\n`;
+      if (tpsl) {
+        msg += `🎯 TP: $${tpsl.takeProfit}\n`;
+        msg += `🛑 SL: $${tpsl.stopLoss}\n`;
+      }
 
       await this.sendMessage(msg);
     } else {
