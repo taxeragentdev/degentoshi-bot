@@ -170,7 +170,7 @@ export class DegenClawTrader {
   }
 
   /**
-   * @param {{ pair: string, side: string, size: number, leverage?: number, tpPercent?: number, slPercent?: number, currentPrice?: number, orderType?: 'market'|'limit', limitPrice?: string|number }} opts
+   * @param {{ pair: string, side: string, size: number, leverage?: number, tpPercent?: number, slPercent?: number, currentPrice?: number, takeProfitPrice?: number, stopLossPrice?: number, orderType?: 'market'|'limit', limitPrice?: string|number }} opts
    */
   async openPosition({
     pair,
@@ -180,6 +180,8 @@ export class DegenClawTrader {
     tpPercent,
     slPercent,
     currentPrice,
+    takeProfitPrice,
+    stopLossPrice,
     orderType = 'market',
     limitPrice
   }) {
@@ -188,7 +190,20 @@ export class DegenClawTrader {
 
     let takeProfit;
     let stopLoss;
-    if (tpPercent && slPercent && currentPrice) {
+
+    const entry = Number(currentPrice);
+    const tpAbs = takeProfitPrice != null ? Number(takeProfitPrice) : NaN;
+    const slAbs = stopLossPrice != null ? Number(stopLossPrice) : NaN;
+    if (Number.isFinite(entry) && entry > 0 && Number.isFinite(tpAbs) && Number.isFinite(slAbs)) {
+      const longOk = sideLc !== 'short' && slAbs < entry && tpAbs > entry;
+      const shortOk = sideLc === 'short' && slAbs > entry && tpAbs < entry;
+      if (longOk || shortOk) {
+        takeProfit = DegenClawTrader.formatPriceLevel(tpAbs);
+        stopLoss = DegenClawTrader.formatPriceLevel(slAbs);
+      }
+    }
+
+    if (!takeProfit && tpPercent && slPercent && currentPrice) {
       const calc = this.calculateTPSL(currentPrice, tpPercent, slPercent, sideLc);
       takeProfit = calc.takeProfit;
       stopLoss = calc.stopLoss;

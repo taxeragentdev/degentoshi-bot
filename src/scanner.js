@@ -348,6 +348,9 @@ export class Scanner {
           side: signal.action.toLowerCase(),
           size,
           leverage: signal.leverage,
+          /** Telegram’daki TP1 / SL ile birebir (HL tetik + ACP). */
+          takeProfitPrice: signal.take_profit?.[0],
+          stopLossPrice: signal.stop_loss,
           tpPercent: Math.abs(tpPercent),
           slPercent: Math.abs(slPercent),
           currentPrice: signal.entry
