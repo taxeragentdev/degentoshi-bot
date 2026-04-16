@@ -76,16 +76,49 @@ export class HyperliquidDirectSession {
   async getAccountBalance() {
     try {
       const user = this.masterAddress;
+
       const perpState = await this.info.clearinghouseState({ user });
-      const w = parseFloat(perpState.withdrawable);
-      if (Number.isFinite(w)) {
-        return { success: true, balance: w, withdrawable: w };
+      const withdrawable = parseFloat(perpState.withdrawable);
+      const w = Number.isFinite(withdrawable) ? withdrawable : 0;
+
+      const avRaw =
+        perpState.marginSummary?.accountValue ??
+        perpState.crossMarginSummary?.accountValue;
+      const accountValue = parseFloat(avRaw);
+      const av = Number.isFinite(accountValue) ? accountValue : 0;
+
+      /** Unified hesapta USDC spot’ta; perp withdrawable sık sık 0 kalır (dgclaw balance ile aynı mantık). */
+      let spotUsdcFree = 0;
+      try {
+        const spotState = await this.info.spotClearinghouseState({ user });
+        for (const b of spotState?.balances ?? []) {
+          const coin = String(b.coin ?? '').toUpperCase();
+          if (coin === 'USDC') {
+            const total = parseFloat(b.total ?? 0);
+            const hold = parseFloat(b.hold ?? 0);
+            spotUsdcFree += Math.max(0, total - hold);
+          }
+        }
+      } catch {
+        /* spot yok / hata — sadece perp kullan */
       }
-      const av = parseFloat(perpState.marginSummary?.accountValue);
-      if (Number.isFinite(av)) {
-        return { success: true, balance: av, withdrawable: w || 0 };
+
+      // Eskiden: isFinite(0) true → hep 0 dönüyordu. Kullanılabilir marjin ≈ bu üçlünün max’ı.
+      const balance = Math.max(av, w, spotUsdcFree);
+
+      if (balance <= 0) {
+        console.warn(
+          `[${this.label}] HL bakiye ~0 (master=${user.slice(0, 10)}…): perp withdrawable=${w}, accountValue=${av}, spotUSDC≈${spotUsdcFree}`
+        );
       }
-      return { success: false, error: 'No balance data' };
+
+      return {
+        success: true,
+        balance,
+        withdrawable: w,
+        accountValue: av,
+        spotUsdcFree
+      };
     } catch (e) {
       return { success: false, error: hlErrorMessage(e) };
     }

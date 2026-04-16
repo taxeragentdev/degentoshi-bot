@@ -49,6 +49,10 @@ HL_VENOM_MASTER_ADDRESS=0x...
 
 `HYPERLIQUID_API_URL` zaten market verisi için kullanılıyor; HL emirleri de aynı host’a gider (mainnet önerilir).
 
+## Bakiye neden 0 görünüyordu?
+
+**Unified account** açıkken USDC çoğunlukla **spot** hesaptadır; perp tarafındaki `withdrawable` sık sık **0** kalır. Bot artık `marginSummary.accountValue`, `withdrawable` ve spot USDC serbest tutarının **üst sınırını** kullanıyor. Hâlâ 0 ise `HL_*_MASTER_ADDRESS` yanlış adrese işaret ediyor olabilir (`acp agent whoami` ile aynı olmalı).
+
 ## Güvenlik
 
 - `HL_*_API_WALLET_KEY` asla repoya commit etmeyin; sadece Railway / sunucu env veya yerel `.env`.
