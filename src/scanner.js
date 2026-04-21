@@ -65,6 +65,7 @@ export class Scanner {
     if (this.autoTrade) {
       console.log(`👥 Active agents: ${this.activeAgents.join(', ')}`);
       console.log(`🎯 Auto-trade min confidence: ${this.autoTradeMinConfidence} (sinyal bunun altındaysa Degen Claw emri yok)`);
+      console.log(`↔ Invert auto-trade: ${CONFIG.invertAutoTradeDirection ? 'ON' : 'OFF'}`);
     }
     console.log(`⏱️  Signal cooldown: ${(this.signalCooldownMs / 60000).toFixed(0)} min/coin (persisted)`);
     console.log(`📡 Hyperliquid data: ${CONFIG.hyperliquidApiUrl}`);
@@ -313,8 +314,30 @@ export class Scanner {
       return;
     }
 
-    const tpPercent = ((signal.take_profit[1] - signal.entry) / signal.entry) * 100;
-    const slPercent = Math.abs((signal.stop_loss - signal.entry) / signal.entry) * 100;
+    let tradeSide = String(signal.action).toLowerCase();
+    let takeProfitPrice = signal.take_profit?.[0];
+    let stopLossPrice = signal.stop_loss;
+    let tpPercent = ((signal.take_profit[1] - signal.entry) / signal.entry) * 100;
+    let slPercent = Math.abs((signal.stop_loss - signal.entry) / signal.entry) * 100;
+
+    if (CONFIG.invertAutoTradeDirection) {
+      const E = Number(signal.entry);
+      const S = Number(signal.stop_loss);
+      const T0 = Number(signal.take_profit?.[0]);
+      const T1 = Number(signal.take_profit?.[1]);
+      if (Number.isFinite(E) && E > 0 && Number.isFinite(S) && Number.isFinite(T0)) {
+        stopLossPrice = 2 * E - S;
+        takeProfitPrice = 2 * E - T0;
+        tradeSide = String(signal.action).toUpperCase() === 'LONG' ? 'short' : 'long';
+        const tpRef = Number.isFinite(T1) ? 2 * E - T1 : takeProfitPrice;
+        tpPercent = Math.abs(((tpRef - E) / E) * 100);
+        slPercent = Math.abs(((stopLossPrice - E) / E) * 100);
+        console.log(
+          `↔ AUTO-TRADE INVERT: ${signal.action} → ${tradeSide.toUpperCase()} ${signal.coin} @ ${E} | TP1≈${takeProfitPrice} SL≈${stopLossPrice}`
+        );
+      }
+    }
+
     const minNotional = CONFIG.autoTradeMinNotionalUsd;
     const frac = CONFIG.autoTradeBalanceFraction;
     const capUsd = CONFIG.autoTradeMaxPositionUsd;
@@ -324,7 +347,10 @@ export class Scanner {
     const openFailures = [];
 
     for (const { agent, trader, alias } of eligible) {
-      console.log(`\n🎮 AUTO-TRADE: ${signal.action} ${signal.coin} → ${agent.label} (${alias})`);
+      console.log(
+        `\n🎮 AUTO-TRADE: ${tradeSide.toUpperCase()} ${signal.coin} → ${agent.label} (${alias})` +
+          (CONFIG.invertAutoTradeDirection ? ' [INVERT]' : '')
+      );
 
       const balanceResult = await trader.getAccountBalance();
       if (!balanceResult.success) {
@@ -345,12 +371,11 @@ export class Scanner {
       const result = await trader.executeWithRetry(() =>
         trader.openPosition({
           pair: pairLabel,
-          side: signal.action.toLowerCase(),
+          side: tradeSide,
           size,
           leverage: signal.leverage,
-          /** Telegram’daki TP1 / SL ile birebir (HL tetik + ACP). */
-          takeProfitPrice: signal.take_profit?.[0],
-          stopLossPrice: signal.stop_loss,
+          takeProfitPrice,
+          stopLossPrice,
           tpPercent: Math.abs(tpPercent),
           slPercent: Math.abs(slPercent),
           currentPrice: signal.entry
@@ -369,7 +394,8 @@ export class Scanner {
       pairLabel,
       successes,
       balanceSkips,
-      openFailures
+      openFailures,
+      executedAction: CONFIG.invertAutoTradeDirection ? tradeSide.toUpperCase() : undefined
     });
   }
   

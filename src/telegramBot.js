@@ -96,9 +96,14 @@ export class TelegramBot {
   /**
    * Aynı sinyalle birden fazla agent: özet tek mesaj
    */
-  async sendAutoTradeBatchResults(signal, { pairLabel, successes, balanceSkips, openFailures }) {
-    const sideEmoji = signal.action === 'LONG' ? '🟢' : '🔴';
-    let msg = `📊 <b>Otomatik işlem özeti</b> — ${sideEmoji} ${signal.action} <code>${pairLabel}</code>\n\n`;
+  async sendAutoTradeBatchResults(signal, { pairLabel, successes, balanceSkips, openFailures, executedAction }) {
+    const act = (executedAction || signal.action || '').toString().toUpperCase();
+    const sideEmoji = act === 'LONG' ? '🟢' : '🔴';
+    let msg = `📊 <b>Otomatik işlem özeti</b> — ${sideEmoji} ${act} <code>${pairLabel}</code>\n`;
+    if (executedAction && executedAction.toUpperCase() !== String(signal.action).toUpperCase()) {
+      msg += `<i>Sinyal yönü: ${signal.action} — env ile ters işlendi (INVERT_AUTO_TRADE_DIRECTION).</i>\n`;
+    }
+    msg += '\n';
 
     if (successes.length > 0) {
       msg += `<b>İşlem açılan agentlar (${successes.length}):</b>\n`;
@@ -336,6 +341,8 @@ Limit: /open raichu BTC long 50 3x limit=98000 tp=2 sl=1.5
     const lev = CONFIG.leverage;
     msg += `\n⚡ <b>Kaldıraç (sinyal):</b> MEDIUM <code>${lev.medium}x</code> · HIGH <code>${lev.high}x</code> · skor ≥ <code>${lev.veryHighMinScore}</code> → <code>${lev.veryHigh}x</code>\n`;
     msg += `<i>Env: LEVERAGE_LOW/MEDIUM/HIGH, LEVERAGE_VERY_HIGH, LEVERAGE_VERY_HIGH_MIN_SCORE</i>\n`;
+
+    msg += `\n↔ <b>Ters otomatik işlem:</b> <code>${CONFIG.invertAutoTradeDirection ? 'AÇIK' : 'KAPALI'}</code> (<code>INVERT_AUTO_TRADE_DIRECTION=true</code>)\n`;
 
     msg += `\n📊 <b>Telegram eşik:</b> <code>${telMin}</code>\n`;
     msg += `📊 <b>Otomatik emir eşik:</b> <code>${tradeMin}</code>`;

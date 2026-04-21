@@ -49,6 +49,11 @@ export const CONFIG = {
     parseFloat(process.env.AUTO_TRADE_MAX_POSITION_USD) > 0
       ? parseFloat(process.env.AUTO_TRADE_MAX_POSITION_USD)
       : 100,
+  /**
+   * Otomatik Degen işleminde sinyalin tersi yön + TP/SL giriş etrafında aynalanır (deneysel / fade).
+   * Varsayılan kapalı — yanlış kullanım zarar riskini artırır.
+   */
+  invertAutoTradeDirection: process.env.INVERT_AUTO_TRADE_DIRECTION === 'true',
 
   coins: process.env.COINS?.split(',') || [
     'BTC/USDC', 'ETH/USDC', 'SOL/USDC', 'DOGE/USDC',
