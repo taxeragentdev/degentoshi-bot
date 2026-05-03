@@ -1,4 +1,4 @@
-// 12 Degen Claw Trading Agents
+// Degen Claw trading agentları — yeni satır: alias (küçük harf), apiKey, label, walletAddress
 export const AGENTS = [
   {
     alias: "doctorstrange",

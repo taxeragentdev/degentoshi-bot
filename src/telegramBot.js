@@ -241,7 +241,7 @@ Hoş geldin! Bot sürekli tarama yapar; Telegram’a sinyal gönderir. <b>Otomat
 ✅ Multi-timeframe analiz (1H, 15M, 5M)
 ✅ 8+ teknik indikatör
 ✅ Perpetual market analizi
-✅ 12 Degen Claw agent (manuel / otomatik)
+✅ ${AGENTS.length} Degen Claw agent (manuel / otomatik)
 ✅ Sinyal bildirimleri
 
 <b>Komutlar:</b> /help · <b>Otomatik işlem durumu:</b> /autotrade
@@ -264,7 +264,7 @@ Hoş geldin! Bot sürekli tarama yapar; Telegram’a sinyal gönderir. <b>Otomat
 <b>Otomatik işlemi durdur (tüm agentlar):</b> Railway’de <code>AUTO_TRADE=false</code> veya <code>ACTIVE_AGENTS=</code> (boş), redeploy. Açık pozisyonları kapatmak için borsada veya <code>/close</code> ile tek tek.
 
 <b>Agent Yönetimi:</b>
-/agents - 12 agent listesi
+/agents - Tüm agent listesi (${AGENTS.length})
 /balance [alias] - Agent bakiyesi
 /positions [alias|all] - Açık pozisyonlar
 /active - Aktif agent listesi
@@ -355,7 +355,7 @@ Limit: /open raichu BTC long 50 3x limit=98000 tp=2 sl=1.5
   }
 
   async sendAgentsList(chatId) {
-    let message = '👥 <b>Degen Claw Agents (12)</b>\n\n';
+    let message = `👥 <b>Degen Claw Agents (${AGENTS.length})</b>\n\n`;
 
     for (const agent of AGENTS) {
       message += `• <code>${agent.alias}</code> - ${agent.label}\n`;
