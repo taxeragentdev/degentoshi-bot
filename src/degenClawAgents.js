@@ -13,6 +13,13 @@ export const AGENTS = [
     walletAddress: "0x28544b7bfce18b2be91ec1c4260fe963cd4eae39"
   },
   {
+    alias: "machoke",
+    // HL-only: Railway HL_MACHOKE_*; ACP kullanacaksan dashboard’dan gerçek apiKey + walletAddress yaz.
+    apiKey: "acp-00000000000000000000",
+    label: "Machoke",
+    walletAddress: "0x0000000000000000000000000000000000000000"
+  },
+  {
     alias: "ichimoku",
     apiKey: "acp-82aac3d0b8a1bb73193f",
     label: "Ichimoku Kinko Hyo",
@@ -53,6 +60,13 @@ export const AGENTS = [
     apiKey: "acp-cdeae3dce5fef2dbe4ec",
     label: "TaXerClaw",
     walletAddress: "0xCC4188F955B7594B272E7bAE0e082089A060CB31"
+  },
+  {
+    alias: "trenchorclaw",
+    // HL-only: Railway HL_TRENCHORCLAW_* (boşluksuz alias). ACP için dashboard apiKey + wallet.
+    apiKey: "acp-00000000000000000001",
+    label: "Trenchor Claw",
+    walletAddress: "0x0000000000000000000000000000000000000000"
   },
   {
     alias: "venom",
